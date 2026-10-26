@@ -65,18 +65,8 @@ export const HabitTracker: React.FC = () => {
   const { recordActivity } = useStreak();
   const { user } = useAuth();
 
-  const [habits, setHabits] = useState<UserHabitRecord[]>(() => {
-    const saved = localStorage.getItem('balance_user_habits');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback
-      }
-    }
-    return INITIAL_HABITS;
-  });
-
+  const [habits, setHabits] = useState<UserHabitRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'mind' | 'body' | 'focus' | 'rest'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -85,53 +75,79 @@ export const HabitTracker: React.FC = () => {
   const [newCategory, setNewCategory] = useState<'mind' | 'body' | 'focus' | 'rest'>('mind');
   const [newFrequency, setNewFrequency] = useState<'daily' | 'weekdays' | 'weekend'>('daily');
 
-  const saveHabits = (newHabits: UserHabitRecord[]) => {
+  // Fetch habits on mount
+  useEffect(() => {
+    const fetchHabits = async () => {
+      if (isSupabaseConfigured && user) {
+        const { data, error } = await supabase
+          .from('user_habits')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          setHabits(data as UserHabitRecord[]);
+        }
+      } else {
+        // Demo fallback
+        const saved = localStorage.getItem('balance_user_habits');
+        if (saved) {
+          try {
+            setHabits(JSON.parse(saved));
+          } catch (e) {
+            setHabits(INITIAL_HABITS);
+          }
+        } else {
+          setHabits(INITIAL_HABITS);
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchHabits();
+  }, [user]);
+
+  const saveHabits = async (newHabits: UserHabitRecord[]) => {
     setHabits(newHabits);
     localStorage.setItem('balance_user_habits', JSON.stringify(newHabits));
   };
 
-  const handleToggleHabit = (id: string) => {
-    const updated = habits.map((h) => {
-      if (h.id === id) {
-        const nextCompleted = !h.completed_today;
-        if (nextCompleted) {
-          recordActivity('habit', `Checked habit: ${h.title}`);
-          try {
-            confetti({
-              particleCount: 40,
-              spread: 60,
-              origin: { y: 0.8 },
-              colors: ['#2F9A5D', '#38B76E', '#FCD466'],
-            });
-          } catch (e) {
-            // ignore
-          }
-        }
-        return {
-          ...h,
-          completed_today: nextCompleted,
-          streak: nextCompleted ? h.streak + 1 : Math.max(0, h.streak - 1),
-        };
-      }
-      return h;
-    });
+  const handleToggleHabit = async (id: string) => {
+    const habit = habits.find(h => h.id === id);
+    if (!habit) return;
 
-    saveHabits(updated);
+    const nextCompleted = !habit.completed_today;
+    const updatedHabit = {
+      ...habit,
+      completed_today: nextCompleted,
+      streak: nextCompleted ? habit.streak + 1 : Math.max(0, habit.streak - 1),
+    };
+
+    const updatedHabits = habits.map(h => h.id === id ? updatedHabit : h);
+    saveHabits(updatedHabits);
+
+    if (nextCompleted) {
+      recordActivity('habit', `Checked habit: ${habit.title}`);
+      try {
+        confetti({
+          particleCount: 40,
+          spread: 60,
+          origin: { y: 0.8 },
+          colors: ['#2F9A5D', '#38B76E', '#FCD466'],
+        });
+      } catch (e) {}
+    }
 
     if (isSupabaseConfigured && user) {
-      const toggled = updated.find((h) => h.id === id);
-      if (toggled) {
-        supabase.from('user_habits').upsert(toggled);
-      }
+      await supabase.from('user_habits').upsert(updatedHabit);
     }
   };
 
-  const handleAddHabit = (e: React.FormEvent) => {
+  const handleAddHabit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const newHabit: UserHabitRecord = {
-      id: `h_${Date.now()}`,
+    const newHabit: Partial<UserHabitRecord> = {
       user_id: user?.id || 'usr_demo',
       title: newTitle.trim(),
       category: newCategory,
@@ -141,13 +157,32 @@ export const HabitTracker: React.FC = () => {
       history: [],
     };
 
-    saveHabits([newHabit, ...habits]);
+    if (isSupabaseConfigured && user) {
+      const { data, error } = await supabase
+        .from('user_habits')
+        .insert(newHabit)
+        .select()
+        .single();
+      
+      if (!error && data) {
+        saveHabits([data as UserHabitRecord, ...habits]);
+      }
+    } else {
+      const demoHabit = { ...newHabit, id: `h_${Date.now()}` } as UserHabitRecord;
+      saveHabits([demoHabit, ...habits]);
+    }
+
     setNewTitle('');
     setIsAddModalOpen(false);
   };
 
-  const handleDeleteHabit = (id: string, e: React.MouseEvent) => {
+  const handleDeleteHabit = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    if (isSupabaseConfigured && user) {
+      await supabase.from('user_habits').delete().eq('id', id);
+    }
+    
     saveHabits(habits.filter((h) => h.id !== id));
   };
 
@@ -228,7 +263,24 @@ export const HabitTracker: React.FC = () => {
 
       {/* Habits List */}
       <div className="space-y-3">
-        {filteredHabits.map((habit) => (
+        {loading ? (
+          <div className="text-center py-20 animate-pulse">
+            <Sparkles className="w-10 h-10 text-sage-300 mx-auto mb-4" />
+            <p className="text-sm text-ink-700/60 dark:text-linen-200/60">Calibrating your habit matrix...</p>
+          </div>
+        ) : filteredHabits.length === 0 ? (
+          <div className="text-center py-20 glass-card rounded-3xl border border-sage-200/60">
+            <Target className="w-10 h-10 text-sage-300 mx-auto mb-4" />
+            <p className="text-sm text-ink-900 dark:text-linen-100 font-bold">No habits in this category yet.</p>
+            <button 
+              onClick={() => setIsAddModalOpen(true)}
+              className="text-xs text-sage-600 font-bold mt-2 hover:underline"
+            >
+              + Create your first habit
+            </button>
+          </div>
+        ) : (
+          filteredHabits.map((habit) => (
           <div
             key={habit.id}
             onClick={() => handleToggleHabit(habit.id)}

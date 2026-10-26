@@ -148,26 +148,46 @@ export const StreakProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Sync with Supabase when logged in
   useEffect(() => {
     if (isSupabaseConfigured && user) {
-      supabase
-        .from('user_streaks')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (data && !error) {
-            setCurrentStreak(data.current_streak);
-            setBestStreak(data.best_streak);
-            setFreezeTokens(data.freeze_tokens);
-            if (data.completion_matrix) {
-              setCompletionMatrix(prev => ({ ...prev, ...data.completion_matrix }));
-            }
+      const fetchStreakData = async () => {
+        const { data, error } = await supabase
+          .from('user_streaks')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (data && !error) {
+          setCurrentStreak(data.current_streak);
+          setBestStreak(data.best_streak);
+          setFreezeTokens(data.freeze_tokens);
+          if (data.completion_matrix) {
+            setCompletionMatrix(data.completion_matrix);
           }
-        });
+          // Check if last activity was today to set todayActions
+          const today = getTodayDateStr();
+          if (data.last_activity_date === today) {
+            // In a real app, we might store todayActions in DB too, 
+            // for now we'll rely on local state or derive from matrix
+          }
+        } else if (error && error.code === 'PGRST116') {
+          // No record found, create one
+          const newStreak = {
+            user_id: user.id,
+            current_streak: 0,
+            best_streak: 0,
+            freeze_tokens: 2,
+            last_activity_date: null,
+            completion_matrix: {},
+          };
+          await supabase.from('user_streaks').insert(newStreak);
+        }
+      };
+
+      fetchStreakData();
     }
   }, [user]);
 
   const recordActivity = useCallback(
-    (actionType: 'moment' | 'mood' | 'habit' | 'pomodoro' | 'breath' | 'challenge', label?: string) => {
+    async (actionType: 'moment' | 'mood' | 'habit' | 'pomodoro' | 'breath' | 'challenge', label?: string) => {
       const todayStr = getTodayDateStr();
       const actionName = label || `Completed ${actionType} activity`;
 
@@ -183,18 +203,19 @@ export const StreakProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         ...prev.slice(0, 7),
       ]);
 
-      setCompletionMatrix(prev => ({
-        ...prev,
-        [todayStr]: true,
-      }));
+      const newMatrix = { ...completionMatrix, [todayStr]: true };
+      setCompletionMatrix(newMatrix);
+
+      let nextStreak = currentStreak;
+      let nextBest = bestStreak;
 
       // If this was the first action today, increment current streak!
-      if (!todayActions.includes(actionType)) {
-        setCurrentStreak(curr => {
-          const next = curr + 1;
-          setBestStreak(best => Math.max(best, next));
-          return next;
-        });
+      if (!todayActions.length || !todayActions.includes(actionType)) {
+        nextStreak = currentStreak + 1;
+        nextBest = Math.max(bestStreak, nextStreak);
+        
+        setCurrentStreak(nextStreak);
+        setBestStreak(nextBest);
 
         // Trigger celebratory confetti
         try {
@@ -204,20 +225,19 @@ export const StreakProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             origin: { y: 0.8 },
             colors: ['#2F9A5D', '#38B76E', '#FCD466', '#E3F2E9'],
           });
-        } catch (e) {
-          // ignore in headless environments
-        }
+        } catch (e) {}
       }
 
       // Supabase async upsert if user logged in
       if (isSupabaseConfigured && user) {
-        supabase.from('user_streaks').upsert({
+        await supabase.from('user_streaks').upsert({
           user_id: user.id,
-          current_streak: currentStreak + 1,
-          best_streak: Math.max(bestStreak, currentStreak + 1),
+          current_streak: nextStreak,
+          best_streak: nextBest,
           freeze_tokens: freezeTokens,
           last_activity_date: todayStr,
-          completion_matrix: { ...completionMatrix, [todayStr]: true },
+          completion_matrix: newMatrix,
+          updated_at: new Date().toISOString(),
         });
       }
     },
