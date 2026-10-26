@@ -40,7 +40,7 @@ export const Architecture: React.FC = () => {
           <span>System Engineering & Cloud Workflow Architecture</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold font-heading text-ink-900 dark:text-linen-100">
-          Balance Studio Architecture Visualizer
+          Balance Compass Architecture Visualizer
         </h1>
         <p className="text-xs sm:text-sm text-ink-700/70 dark:text-linen-200/70">
           Engineered strictly without a custom Express backend. All AI processing, business logic, payment signature validations, and scheduled syncs run serverlessly via n8n Cloud webhooks and Supabase PostgreSQL Row Level Security (RLS).
@@ -138,7 +138,7 @@ export const Architecture: React.FC = () => {
                 </button>
               </div>
               <p className="text-xs text-ink-700/80 dark:text-linen-200/80 leading-relaxed">
-                n8n acts as the central headless nervous system of Balance Studio. It receives encrypted payloads from client events, injects system prompt instructions for compassionate mindfulness, queries third-party LLMs, and triggers automated updates.
+                n8n acts as the central headless nervous system of Balance Compass. It receives encrypted payloads from client events, injects system prompt instructions for compassionate mindfulness, queries third-party LLMs, and triggers automated updates.
               </p>
               <div className="p-3 bg-white dark:bg-ink-950 rounded-xl font-mono text-[11px] text-sage-800 dark:text-sage-200 border border-sage-200/60 space-y-1">
                 <div>AI Chat Endpoint: <span className="text-amber-600">{N8N_WEBHOOKS.AI_CHAT}</span></div>

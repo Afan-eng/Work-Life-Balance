@@ -10,7 +10,7 @@ import { openRazorpayCheckout } from '../lib/razorpay';
 
 export const Profile: React.FC = () => {
   const { profile, updateProfile, signOut } = useAuth();
-  const { currentStreak, bestStreak, freezeTokens, dailyGoals } = useStreak();
+  const { currentStreak, projectedStreak, bestStreak, todayCompleted, dailyGoals } = useStreak();
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [editingName, setEditingName] = useState(profile?.fullName || 'Elena Vance');
@@ -43,7 +43,7 @@ export const Profile: React.FC = () => {
   const handleExportData = () => {
     const exportPayload = {
       userProfile: profile,
-      streakMetrics: { currentStreak, bestStreak, freezeTokens },
+      streakMetrics: { currentStreak, bestStreak },
       goals: dailyGoals,
       exportedAt: new Date().toISOString(),
     };
@@ -158,7 +158,7 @@ export const Profile: React.FC = () => {
         <div className="glass-card rounded-2xl p-5 border border-sage-200/70 dark:border-ink-700 text-center space-y-1">
           <Flame className="w-6 h-6 text-warmAmber-500 mx-auto fill-warmAmber-500" />
           <span className="block text-2xl font-extrabold font-heading text-ink-900 dark:text-linen-100">
-            {currentStreak} Days
+            {todayCompleted ? projectedStreak : currentStreak} Days
           </span>
           <span className="text-xs text-ink-700/60 dark:text-linen-200/60">Current Active Streak</span>
         </div>
@@ -174,9 +174,9 @@ export const Profile: React.FC = () => {
         <div className="glass-card rounded-2xl p-5 border border-sage-200/70 dark:border-ink-700 text-center space-y-1">
           <ShieldCheck className="w-6 h-6 text-teal-500 mx-auto" />
           <span className="block text-2xl font-extrabold font-heading text-ink-900 dark:text-linen-100">
-            {freezeTokens} Shields
+            {todayCompleted ? 'Recorded' : 'Not yet'}
           </span>
-          <span className="text-xs text-ink-700/60 dark:text-linen-200/60">Streak Freeze Protection</span>
+          <span className="text-xs text-ink-700/60 dark:text-linen-200/60">Today's tracker status</span>
         </div>
       </div>
 

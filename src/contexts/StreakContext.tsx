@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { calculateStreaks, getLocalDateKey } from '../lib/utils';
 
 export interface DailyGoal {
   id: string;
@@ -19,283 +20,238 @@ export interface ActivityLog {
 interface StreakContextType {
   currentStreak: number;
   bestStreak: number;
-  freezeTokens: number;
+  todayCompleted: boolean;
+  projectedStreak: number;
+  streakError: string;
   todayActions: string[];
   recentActivities: ActivityLog[];
-  completionMatrix: Record<string, boolean>; // 'YYYY-MM-DD': boolean
+  completionMatrix: Record<string, boolean>;
   dailyGoals: DailyGoal[];
   remainingGoalsCount: number;
-  recordActivity: (actionType: 'moment' | 'mood' | 'habit' | 'pomodoro' | 'breath' | 'challenge', label?: string) => void;
+  recordActivity: (actionType: ActivityLog['actionType'], label?: string) => void;
   toggleDailyGoal: (goalId: string) => void;
-  useFreezeToken: () => boolean;
   isActionCompletedToday: (actionType: string) => boolean;
 }
 
+interface StoredStreak {
+  currentStreak?: number;
+  bestStreak?: number;
+  todayActions?: string[];
+  lastActiveDate?: string;
+  recentActivities?: ActivityLog[];
+  completionMatrix?: Record<string, boolean>;
+}
+
 const StreakContext = createContext<StreakContextType | undefined>(undefined);
-
 const LOCAL_STORAGE_STREAK_KEY = 'balance_streak_data_v1';
+const INITIAL_DAILY_GOALS: DailyGoal[] = [];
+const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-const INITIAL_DAILY_GOALS: DailyGoal[] = [
-  { id: 'dg_1', title: '60s Box Breathing reset', category: 'mind', completed: true },
-  { id: 'dg_2', title: 'Complete 25m Focus Sprint', category: 'focus', completed: false },
-  { id: 'dg_3', title: 'Midday hydration & posture pause', category: 'body', completed: true },
-];
+const readStored = (userId: string): StoredStreak => {
+  try {
+    return JSON.parse(localStorage.getItem(`${LOCAL_STORAGE_STREAK_KEY}_${userId}`) || '{}') as StoredStreak;
+  } catch {
+    return {};
+  }
+};
 
 export const StreakProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
+  const [todayActions, setTodayActions] = useState<string[]>([]);
+  const [recentActivities, setRecentActivities] = useState<ActivityLog[]>([]);
+  const [completionMatrix, setCompletionMatrix] = useState<Record<string, boolean>>({});
+  const [dailyGoals, setDailyGoals] = useState<DailyGoal[]>(INITIAL_DAILY_GOALS);
+  const [streakError, setStreakError] = useState('');
+  const matrixRef = useRef<Record<string, boolean>>({});
+  const actionsRef = useRef<string[]>([]);
+  const activitiesRef = useRef<ActivityLog[]>([]);
+  const goalsRef = useRef<DailyGoal[]>([]);
+  const userRef = useRef<string | null>(null);
 
-  const getTodayDateStr = () => new Date().toISOString().split('T')[0];
-
-  const [currentStreak, setCurrentStreak] = useState<number>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_STREAK_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved).currentStreak || 6;
-      } catch (e) {
-        return 6;
-      }
-    }
-    return 6;
-  });
-
-  const [bestStreak, setBestStreak] = useState<number>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_STREAK_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved).bestStreak || 14;
-      } catch (e) {
-        return 14;
-      }
-    }
-    return 14;
-  });
-
-  const [freezeTokens, setFreezeTokens] = useState<number>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_STREAK_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved).freezeTokens ?? 2;
-      } catch (e) {
-        return 2;
-      }
-    }
-    return 2;
-  });
-
-  const [todayActions, setTodayActions] = useState<string[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_STREAK_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.lastActiveDate === getTodayDateStr()) {
-          return parsed.todayActions || ['breath', 'moment'];
-        }
-      } catch (e) {
-        return ['breath', 'moment'];
-      }
-    }
-    return ['breath', 'moment'];
-  });
-
-  const [recentActivities, setRecentActivities] = useState<ActivityLog[]>([
-    { actionType: 'breath', label: 'Completed 60s Box Breathing', timestamp: '20 mins ago' },
-    { actionType: 'moment', label: 'Grounding Balance Moment logged', timestamp: '1 hour ago' },
-    { actionType: 'mood', label: 'Midday Mood recorded: Balanced', timestamp: '3 hours ago' },
-  ]);
-
-  const [completionMatrix, setCompletionMatrix] = useState<Record<string, boolean>>(() => {
-    // Generate realistic 7-day completion
-    const matrix: Record<string, boolean> = {};
-    const today = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const str = d.toISOString().split('T')[0];
-      matrix[str] = i !== 5; // e.g. 6 out of 7 days completed
-    }
-    return matrix;
-  });
-
-  const [dailyGoals, setDailyGoals] = useState<DailyGoal[]>(() => {
-    const saved = localStorage.getItem('balance_daily_goals');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_DAILY_GOALS;
-      }
-    }
-    return INITIAL_DAILY_GOALS;
-  });
-
-  // Sync to localStorage
-  useEffect(() => {
-    const payload = {
-      currentStreak,
-      bestStreak,
-      freezeTokens,
-      todayActions,
-      lastActiveDate: getTodayDateStr(),
-      completionMatrix,
+  const persist = useCallback((matrix: Record<string, boolean>, actions: string[], activities: ActivityLog[], userId: string, activityDate = getLocalDateKey()) => {
+    const today = getLocalDateKey();
+    const streaks = calculateStreaks(matrix, today);
+    const completedDates = Object.keys(matrix).filter((date) => matrix[date]).sort();
+    const latestActivity = completedDates[completedDates.length - 1] || null;
+    const payload: StoredStreak = {
+      ...streaks,
+      todayActions: actions,
+      lastActiveDate: actions.length ? activityDate : latestActivity || undefined,
+      recentActivities: activities,
+      completionMatrix: matrix,
     };
-    localStorage.setItem(LOCAL_STORAGE_STREAK_KEY, JSON.stringify(payload));
-  }, [currentStreak, bestStreak, freezeTokens, todayActions, completionMatrix]);
+    localStorage.setItem(`${LOCAL_STORAGE_STREAK_KEY}_${userId}`, JSON.stringify(payload));
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('balance_daily_goals', JSON.stringify(dailyGoals));
-  }, [dailyGoals]);
+    let cancelled = false;
+    if (!user) {
+      userRef.current = null;
+      matrixRef.current = {};
+      actionsRef.current = [];
+      activitiesRef.current = [];
+      goalsRef.current = INITIAL_DAILY_GOALS;
+      setStreakError('');
+      setCurrentStreak(0);
+      setBestStreak(0);
+      setTodayActions([]);
+      setRecentActivities([]);
+      setCompletionMatrix({});
+      setDailyGoals(INITIAL_DAILY_GOALS);
+      return;
+    }
 
-  // Sync with Supabase when logged in
+    const userId = user.id;
+    userRef.current = userId;
+    setStreakError('');
+    const today = getLocalDateKey();
+    const cached = readStored(userId);
+    const cachedMatrix = cached.completionMatrix || {};
+    const actions = cached.lastActiveDate === today ? cached.todayActions || [] : [];
+    matrixRef.current = cachedMatrix;
+    actionsRef.current = actions;
+    activitiesRef.current = cached.recentActivities || [];
+    setCompletionMatrix(cachedMatrix);
+    setTodayActions(actions);
+    setRecentActivities(activitiesRef.current);
+    try { goalsRef.current = JSON.parse(localStorage.getItem(`balance_daily_goals_${userId}`) || '[]'); }
+    catch { goalsRef.current = INITIAL_DAILY_GOALS; }
+    setDailyGoals(goalsRef.current);
+    const cachedStreaks = calculateStreaks(cachedMatrix, today);
+    setCurrentStreak(cachedStreaks.currentStreak);
+    setBestStreak(cachedStreaks.bestStreak);
+
+    const hydrateRemote = async () => {
+      if (!isSupabaseConfigured) return;
+      const { data } = await supabase.from('user_streaks').select('completion_matrix').eq('user_id', userId).maybeSingle();
+      if (cancelled || userRef.current !== userId) return;
+      const remoteMatrix = (data?.completion_matrix || {}) as Record<string, boolean>;
+      const merged = isSupabaseConfigured ? remoteMatrix : { ...remoteMatrix, ...matrixRef.current };
+      matrixRef.current = merged;
+      const summary = calculateStreaks(merged, getLocalDateKey());
+      setCompletionMatrix(merged);
+      setCurrentStreak(summary.currentStreak);
+      setBestStreak(summary.bestStreak);
+      const currentDay = getLocalDateKey();
+      const todayActions = cached.lastActiveDate === currentDay && remoteMatrix[currentDay] ? actionsRef.current : [];
+      actionsRef.current = todayActions;
+      setTodayActions(todayActions);
+      persist(merged, todayActions, cached.recentActivities || [], userId);
+    };
+    void hydrateRemote();
+
+    return () => { cancelled = true; };
+  }, [user, persist]);
+
+  // Lock yesterday's contribution when the user's local calendar day changes.
   useEffect(() => {
-    if (isSupabaseConfigured && user) {
-      const fetchStreakData = async () => {
-        const { data, error } = await supabase
-          .from('user_streaks')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
+    if (!user) return;
+    let observedDay = getLocalDateKey();
+    const timer = window.setInterval(() => {
+      const nextDay = getLocalDateKey();
+      if (nextDay === observedDay) return;
+      observedDay = nextDay;
+      actionsRef.current = [];
+      setTodayActions([]);
+      const summary = calculateStreaks(matrixRef.current, nextDay);
+      setCurrentStreak(summary.currentStreak);
+      setBestStreak(summary.bestStreak);
+      persist(matrixRef.current, [], activitiesRef.current, user.id);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [user, persist]);
 
-        if (data && !error) {
-          setCurrentStreak(data.current_streak);
-          setBestStreak(data.best_streak);
-          setFreezeTokens(data.freeze_tokens);
-          if (data.completion_matrix) {
-            setCompletionMatrix(data.completion_matrix);
-          }
-          // Check if last activity was today to set todayActions
-          const today = getTodayDateStr();
-          if (data.last_activity_date === today) {
-            // In a real app, we might store todayActions in DB too, 
-            // for now we'll rely on local state or derive from matrix
-          }
-        } else if (error && error.code === 'PGRST116') {
-          // No record found, create one
-          const newStreak = {
-            user_id: user.id,
-            current_streak: 0,
-            best_streak: 0,
-            freeze_tokens: 2,
-            last_activity_date: null,
-            completion_matrix: {},
-          };
-          await supabase.from('user_streaks').insert(newStreak);
+  const recordActivity = useCallback(async (actionType: ActivityLog['actionType'], label?: string) => {
+    const userId = userRef.current;
+    if (!userId) return;
+    let activityDate = getLocalDateKey();
+    let nextMatrix: Record<string, boolean>;
+    let verifiedSummary: { current_streak?: number; best_streak?: number } | null = null;
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('record_tracker_completion', { p_action_type: actionType, p_time_zone: timeZone });
+        if (error || !data) {
+          setStreakError('This tracker contribution could not be verified. Check your connection and apply the streak database migration; the day was not counted.');
+          return;
         }
-      };
-
-      fetchStreakData();
-    }
-  }, [user]);
-
-  const recordActivity = useCallback(
-    async (actionType: 'moment' | 'mood' | 'habit' | 'pomodoro' | 'breath' | 'challenge', label?: string) => {
-      const todayStr = getTodayDateStr();
-      const actionName = label || `Completed ${actionType} activity`;
-
-      setTodayActions(prev => {
-        if (!prev.includes(actionType)) {
-          return [...prev, actionType];
-        }
-        return prev;
-      });
-
-      setRecentActivities(prev => [
-        { actionType, label: actionName, timestamp: 'Just now' },
-        ...prev.slice(0, 7),
-      ]);
-
-      const newMatrix = { ...completionMatrix, [todayStr]: true };
-      setCompletionMatrix(newMatrix);
-
-      let nextStreak = currentStreak;
-      let nextBest = bestStreak;
-
-      // If this was the first action today, increment current streak!
-      if (!todayActions.length || !todayActions.includes(actionType)) {
-        nextStreak = currentStreak + 1;
-        nextBest = Math.max(bestStreak, nextStreak);
-        
-        setCurrentStreak(nextStreak);
-        setBestStreak(nextBest);
-
-        // Trigger celebratory confetti
-        try {
-          confetti({
-            particleCount: 50,
-            spread: 60,
-            origin: { y: 0.8 },
-            colors: ['#2F9A5D', '#38B76E', '#FCD466', '#E3F2E9'],
-          });
-        } catch (e) {}
+        activityDate = data.today as string;
+        nextMatrix = data.completion_matrix as Record<string, boolean>;
+        verifiedSummary = data as { current_streak?: number; best_streak?: number };
+        setStreakError('');
+      } catch {
+        setStreakError('This tracker contribution could not be verified. Check your connection; the day was not counted.');
+        return;
       }
-
-      // Supabase async upsert if user logged in
-      if (isSupabaseConfigured && user) {
-        await supabase.from('user_streaks').upsert({
-          user_id: user.id,
-          current_streak: nextStreak,
-          best_streak: nextBest,
-          freeze_tokens: freezeTokens,
-          last_activity_date: todayStr,
-          completion_matrix: newMatrix,
-          updated_at: new Date().toISOString(),
-        });
-      }
-    },
-    [todayActions, currentStreak, bestStreak, freezeTokens, completionMatrix, user]
-  );
-
-  const toggleDailyGoal = useCallback(
-    (goalId: string) => {
-      setDailyGoals(prev => {
-        const next = prev.map(g => (g.id === goalId ? { ...g, completed: !g.completed } : g));
-        const allCompleted = next.every(g => g.completed);
-        if (allCompleted) {
-          recordActivity('habit', 'All 3 Daily Micro-Goals Completed!');
-        }
-        return next;
-      });
-    },
-    [recordActivity]
-  );
-
-  const useFreezeToken = useCallback((): boolean => {
-    if (freezeTokens > 0) {
-      setFreezeTokens(curr => curr - 1);
-      return true;
+    } else {
+      nextMatrix = { ...matrixRef.current, [activityDate]: true };
     }
-    return false;
-  }, [freezeTokens]);
+    const wasCompletedToday = Boolean(matrixRef.current[activityDate]);
+    matrixRef.current = nextMatrix;
+    const todayActions = activityDate === getLocalDateKey() ? actionsRef.current : [];
+    const nextActions = todayActions.includes(actionType) ? todayActions : [...todayActions, actionType];
+    actionsRef.current = nextActions;
+    const nextActivities: ActivityLog[] = [
+      { actionType, label: label || `Completed ${actionType} tracker`, timestamp: new Date().toISOString() },
+      ...activitiesRef.current.slice(0, 6),
+    ];
+    activitiesRef.current = nextActivities;
+    setCompletionMatrix(nextMatrix);
+    setTodayActions(nextActions);
+    setRecentActivities(nextActivities);
+    const summary = calculateStreaks(nextMatrix, getLocalDateKey());
+    setCurrentStreak(verifiedSummary?.current_streak ?? summary.currentStreak);
+    setBestStreak(verifiedSummary?.best_streak ?? summary.bestStreak);
+    persist(nextMatrix, nextActions, nextActivities, userId, activityDate);
+    if (!wasCompletedToday) {
+      try { confetti({ particleCount: 35, spread: 55, origin: { y: 0.8 }, colors: ['#2F9A5D', '#38B76E', '#FCD466'] }); } catch { /* optional animation */ }
+    }
+  }, [persist]);
 
-  const isActionCompletedToday = useCallback(
-    (actionType: string) => {
-      return todayActions.includes(actionType);
-    },
-    [todayActions]
-  );
+  const toggleDailyGoal = useCallback((goalId: string) => {
+    const previous = goalsRef.current;
+    const next = previous.map((goal) => goal.id === goalId ? { ...goal, completed: !goal.completed } : goal);
+    goalsRef.current = next;
+    setDailyGoals(next);
+    const owner = userRef.current;
+    if (owner) localStorage.setItem(`balance_daily_goals_${owner}`, JSON.stringify(next));
+    if (next.length > 0 && next.every((goal) => goal.completed) && !previous.every((goal) => goal.completed)) {
+      void recordActivity('habit', 'Completed all daily micro-goals');
+    }
+  }, [recordActivity]);
 
-  const remainingGoalsCount = dailyGoals.filter(g => !g.completed).length;
+  const todayKey = getLocalDateKey();
+  const todayCompleted = Boolean(completionMatrix[todayKey]);
+  const projectedStreak = todayCompleted
+    ? (completionMatrix[shiftYesterday(todayKey)] ? currentStreak + 1 : 1)
+    : currentStreak;
+  const remainingGoalsCount = dailyGoals.filter((goal) => !goal.completed).length;
+  const isActionCompletedToday = useCallback((actionType: string) => todayActions.includes(actionType), [todayActions]);
 
-  return (
-    <StreakContext.Provider
-      value={{
-        currentStreak,
-        bestStreak,
-        freezeTokens,
-        todayActions,
-        recentActivities,
-        completionMatrix,
-        dailyGoals,
-        remainingGoalsCount,
-        recordActivity,
-        toggleDailyGoal,
-        useFreezeToken,
-        isActionCompletedToday,
-      }}
-    >
-      {children}
-    </StreakContext.Provider>
-  );
+  return <StreakContext.Provider value={{
+    currentStreak,
+    bestStreak,
+    todayCompleted,
+    projectedStreak,
+    streakError,
+    todayActions,
+    recentActivities,
+    completionMatrix,
+    dailyGoals,
+    remainingGoalsCount,
+    recordActivity,
+    toggleDailyGoal,
+    isActionCompletedToday,
+  }}>{children}</StreakContext.Provider>;
 };
+
+function shiftYesterday(today: string) {
+  const [year, month, day] = today.split('-').map(Number);
+  const date = new Date(year, month - 1, day, 12);
+  date.setDate(date.getDate() - 1);
+  return getLocalDateKey(date);
+}
 
 export const useStreak = () => {
   const context = useContext(StreakContext);

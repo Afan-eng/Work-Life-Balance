@@ -1,58 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Target, Award, Calendar, Plus, CheckCircle2, Circle, X, Sparkles, Trophy } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, isSupabaseConfigured, type UserGoalRecord } from '../lib/supabase';
 
-const INITIAL_GOALS: UserGoalRecord[] = [
-  {
-    id: 'g_1',
-    user_id: 'usr_demo',
-    title: 'Achieve Sustainable 35-Hour Focused Workweek',
-    category: 'Career',
-    target_date: '2026-12-15',
-    progress: 75,
-    milestones: [
-      { id: 'm1', title: 'Audit weekly calendar & remove 4 unnecessary meetings', completed: true },
-      { id: 'm2', title: 'Institute non-negotiable 90m deep work sprint daily', completed: true },
-      { id: 'm3', title: 'Decline all afternoon notifications', completed: true },
-      { id: 'm4', title: 'Leave office by 5:30 PM for 5 consecutive workdays', completed: false },
-    ],
-    status: 'active',
-  },
-  {
-    id: 'g_2',
-    user_id: 'usr_demo',
-    title: 'Complete 21-Day Nervous System Reset',
-    category: 'Mental',
-    target_date: '2026-11-20',
-    progress: 60,
-    milestones: [
-      { id: 'm5', title: 'Complete 7 days of Box Breathing', completed: true },
-      { id: 'm6', title: 'Take 3 nature grounding walks without earphones', completed: true },
-      { id: 'm7', title: 'Log evening mood journal 14 consecutive nights', completed: false },
-    ],
-    status: 'active',
-  },
-  {
-    id: 'g_3',
-    user_id: 'usr_demo',
-    title: 'Consistent 7.5+ Hours Circadian Sleep',
-    category: 'Physical',
-    target_date: '2026-11-30',
-    progress: 40,
-    milestones: [
-      { id: 'm8', title: 'Screen off at 9:30 PM for 10 days', completed: true },
-      { id: 'm9', title: 'Morning sunlight exposure within 30 mins of waking', completed: true },
-      { id: 'm10', title: 'Zero caffeine after 1:00 PM', completed: false },
-    ],
-    status: 'active',
-  },
-];
-
 const BADGES = [
-  { title: 'Somatic Pioneer', desc: 'Completed first 7-day grounding milestone', icon: '🌿', unlocked: true },
-  { title: 'Focus Sprint Master', desc: 'Over 10 successful Pomodoro cycles', icon: '⏱️', unlocked: true },
-  { title: 'Circadian Alchemist', desc: 'Consistent sleep hygiene streak', icon: '🌙', unlocked: true },
+  { title: 'Somatic Pioneer', desc: 'Completed first 7-day grounding milestone', icon: '🌿', unlocked: false },
+  { title: 'Focus Sprint Master', desc: 'Over 10 successful Pomodoro cycles', icon: '⏱️', unlocked: false },
+  { title: 'Circadian Alchemist', desc: 'Consistent sleep hygiene streak', icon: '🌙', unlocked: false },
   { title: 'Zen Equilibrium', desc: 'Achieved 95%+ Balance Score', icon: '💎', unlocked: false },
 ];
 
@@ -81,8 +35,8 @@ export const GoalTracker: React.FC = () => {
           setGoals(data as UserGoalRecord[]);
         }
       } else {
-        // Demo fallback
-        setGoals(INITIAL_GOALS);
+        try { setGoals(user ? JSON.parse(localStorage.getItem(`balance_user_goals_${user.id}`) || '[]') : []); }
+        catch { setGoals([]); }
       }
       setLoading(false);
     };
@@ -108,6 +62,10 @@ export const GoalTracker: React.FC = () => {
     };
 
     setGoals((prev) => prev.map((g) => (g.id === goalId ? updatedGoal : g)));
+    if (!isSupabaseConfigured && user) {
+      const next = goals.map(g => g.id === goalId ? updatedGoal : g);
+      localStorage.setItem(`balance_user_goals_${user.id}`, JSON.stringify(next));
+    }
 
     if (isSupabaseConfigured && user) {
       await supabase.from('user_goals').upsert(updatedGoal);
@@ -119,7 +77,7 @@ export const GoalTracker: React.FC = () => {
     if (!newTitle.trim()) return;
 
     const newGoal: Partial<UserGoalRecord> = {
-      user_id: user?.id || 'usr_demo',
+      user_id: user?.id || '',
       title: newTitle.trim(),
       category: newCategory,
       target_date: newDate,
@@ -141,9 +99,11 @@ export const GoalTracker: React.FC = () => {
       if (!error && data) {
         setGoals([data as UserGoalRecord, ...goals]);
       }
-    } else {
+    } else if (user) {
       const demoGoal = { ...newGoal, id: `g_${Date.now()}` } as UserGoalRecord;
-      setGoals([demoGoal, ...goals]);
+      const next = [demoGoal, ...goals];
+      setGoals(next);
+      localStorage.setItem(`balance_user_goals_${user.id}`, JSON.stringify(next));
     }
 
     setNewTitle('');
@@ -239,8 +199,7 @@ export const GoalTracker: React.FC = () => {
               + Map out a new holistic goal
             </button>
           </div>
-        ) : (
-          filteredGoals.map((goal) => (
+        ) : filteredGoals.map((goal) => (
           <div
             key={goal.id}
             className="glass-card rounded-3xl p-6 sm:p-7 shadow-soft border border-sage-200/80 dark:border-ink-700 space-y-5"
@@ -255,8 +214,9 @@ export const GoalTracker: React.FC = () => {
                     <Calendar className="w-3 h-3" /> Target: {goal.target_date}
                   </span>
                 </div>
-                <h3 className="font-heading font-bold text-lg text-ink-900 dark:text-linen-100">
+                <h3 className="font-heading font-bold text-lg text-ink-900 dark:text-linen-100 flex items-center gap-2">
                   {goal.title}
+                  {goal.progress === 100 && <Sparkles className="w-4 h-4 text-warmAmber-500" />}
                 </h3>
               </div>
               <div className="text-right">

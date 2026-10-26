@@ -363,7 +363,7 @@ export const SppuCep: React.FC = () => {
               </p>
               <p>
                 Student of <strong>{selectedCollege}</strong>, has successfully executed and completed{' '}
-                <strong>{totalHoursLogged} Hours</strong> of accredited community engagement and student mental wellbeing initiatives under the <strong>Balance Studio Pune Platform</strong>.
+                <strong>{totalHoursLogged} Hours</strong> of accredited community engagement and student mental wellbeing initiatives under the <strong>Balance Compass Pune Platform</strong>.
               </p>
             </div>
 

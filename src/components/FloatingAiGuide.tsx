@@ -26,16 +26,8 @@ export const FloatingAiGuide: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const [threads, setThreads] = useState<ChatThread[]>(() => {
-    const saved = localStorage.getItem('balance_ai_threads');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback
-      }
-    }
-    return [
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const makeWelcomeThread = (): ChatThread[] => [
       {
         id: 'thread_initial',
         title: 'Sanctuary Welcome & Grounding',
@@ -48,9 +40,8 @@ export const FloatingAiGuide: React.FC = () => {
         ],
       },
     ];
-  });
 
-  const [activeThreadId, setActiveThreadId] = useState<string>('thread_initial');
+  const [activeThreadId, setActiveThreadId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0];
@@ -88,7 +79,15 @@ export const FloatingAiGuide: React.FC = () => {
           );
           setThreads(loadedThreads);
           setActiveThreadId(loadedThreads[0].id);
-        }
+        } else if (!threadError) { const welcome = makeWelcomeThread(); setThreads(welcome); setActiveThreadId(welcome[0].id); }
+      } else if (user) {
+        try {
+          const saved = JSON.parse(localStorage.getItem(`balance_ai_threads_${user.id}`) || 'null');
+          const restored = Array.isArray(saved) && saved.length ? saved : makeWelcomeThread();
+          setThreads(restored); setActiveThreadId(restored[0].id);
+        } catch { const welcome = makeWelcomeThread(); setThreads(welcome); setActiveThreadId(welcome[0].id); }
+      } else {
+        setThreads([]); setActiveThreadId('');
       }
     };
 
@@ -96,8 +95,8 @@ export const FloatingAiGuide: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    localStorage.setItem('balance_ai_threads', JSON.stringify(threads));
-  }, [threads]);
+    if (user) localStorage.setItem(`balance_ai_threads_${user.id}`, JSON.stringify(threads));
+  }, [threads, user]);
 
   useEffect(() => {
     if (isOpen) {

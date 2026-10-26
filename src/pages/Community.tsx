@@ -1,66 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, MessageSquare, ThumbsUp, Plus, Sparkles, X, CheckCircle2, Heart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useStreak } from '../contexts/StreakContext';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface Post {
   id: string;
-  author: string;
-  avatar: string;
-  role: string;
+  user_id: string;
+  author_name: string;
+  author_avatar: string;
+  author_role: string;
   category: 'Grounding' | 'Deep Work' | 'Habit Wins' | 'Questions';
   title: string;
   body: string;
   upvotes: number;
-  repliesCount: number;
-  createdAt: string;
+  replies_count: number;
+  created_at: string;
   hasUpvoted?: boolean;
 }
 
-const INITIAL_POSTS: Post[] = [
-  {
-    id: 'post_1',
-    author: 'Elena Vance',
-    avatar: '/assets/images/hero-focus.jpg',
-    role: 'Studio Founder',
-    category: 'Grounding',
-    title: 'The "Two-Sigh Rule" before opening your inbox in the morning',
-    body: 'Whenever I sit at my desk, before opening my email client or Slack, I practice two physiological sighs (double inhale, long mouth exhale). It prevents that automatic spike in cortisol. Anyone else tried this?',
-    upvotes: 48,
-    repliesCount: 14,
-    createdAt: '2 hours ago',
-  },
-  {
-    id: 'post_2',
-    author: 'David Okafor',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80',
-    role: 'Engineering Lead',
-    category: 'Habit Wins',
-    title: 'Hit 21 days on the Phone-Free Bedroom habit! Here is what shifted',
-    body: 'First 4 days were genuinely uncomfortable—I kept reflexively reaching for my nightstand. By day 10, my sleep latency dropped to under 15 minutes. Waking up feels peaceful instead of frantic.',
-    upvotes: 62,
-    repliesCount: 22,
-    createdAt: '5 hours ago',
-  },
-  {
-    id: 'post_3',
-    author: 'Maya Lin',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
-    role: 'Product Designer',
-    category: 'Deep Work',
-    title: 'How do you protect your 90-minute Ultradian focus from urgent Slack pings?',
-    body: 'I struggle with asynchronous boundaries. Colleagues mark things as urgent when they are merely convenient. What status messages or expectations have worked for you?',
-    upvotes: 35,
-    repliesCount: 19,
-    createdAt: '1 day ago',
-  },
-];
-
 export const Community: React.FC = () => {
-  const { profile } = useAuth();
-  const { recordActivity } = useStreak();
+  const { user, profile, openAuthModal } = useAuth();
 
-  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedCat, setSelectedCat] = useState<string>('All');
   const [isNewPostModalOpen, setIsNewPostModalOpen] = useState(false);
 
@@ -69,10 +31,43 @@ export const Community: React.FC = () => {
   const [newBody, setNewBody] = useState('');
   const [newCat, setNewCat] = useState<'Grounding' | 'Deep Work' | 'Habit Wins' | 'Questions'>('Grounding');
 
-  const handleUpvote = (id: string) => {
+  // Fetch posts from Supabase
+  useEffect(() => {
+    const fetchPosts = async () => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from('community_posts')
+          .select('*, community_upvotes(user_id)')
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          const formattedPosts = data.map((p: any) => ({
+            ...p,
+            hasUpvoted: p.community_upvotes?.some((v: any) => v.user_id === user?.id)
+          }));
+          setPosts(formattedPosts);
+        }
+      } else {
+        try { setPosts(JSON.parse(localStorage.getItem('balance_community_posts') || '[]')); }
+        catch { setPosts([]); }
+      }
+      setLoading(false);
+    };
+
+    fetchPosts();
+  }, [user]);
+
+  const handleUpvote = async (postId: string) => {
+    if (!user) { openAuthModal('login'); return; }
+
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const nextUpvoted = !post.hasUpvoted;
+
+    // Optimistic UI update
     setPosts(prev => prev.map(p => {
-      if (p.id === id) {
-        const nextUpvoted = !p.hasUpvoted;
+      if (p.id === postId) {
         return {
           ...p,
           upvotes: nextUpvoted ? p.upvotes + 1 : p.upvotes - 1,
@@ -81,28 +76,56 @@ export const Community: React.FC = () => {
       }
       return p;
     }));
+
+    if (isSupabaseConfigured) {
+      if (nextUpvoted) {
+        await supabase.from('community_upvotes').insert({ post_id: postId, user_id: user.id });
+        await supabase.rpc('increment_upvotes', { post_id: postId });
+      } else {
+        await supabase.from('community_upvotes').delete().eq('post_id', postId).eq('user_id', user.id);
+        await supabase.rpc('decrement_upvotes', { post_id: postId });
+      }
+    }
   };
 
-  const handleCreatePost = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newBody.trim()) return;
+  const startDiscussion = () => {
+    if (!user) { openAuthModal('login'); return; }
+    setIsNewPostModalOpen(true);
+  };
 
-    const newPost: Post = {
-      id: `p_${Date.now()}`,
-      author: profile?.fullName || 'Mindful Seeker',
-      avatar: profile?.avatarUrl || '/assets/images/hero-focus.jpg',
-      role: 'Community Member',
+  const handleCreatePost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !newBody.trim() || !user) return;
+
+    const newPostData = {
+      user_id: user.id,
+      author_name: profile?.fullName || 'Mindful Seeker',
+      author_avatar: profile?.avatarUrl || '/assets/images/hero-focus.jpg',
+      author_role: 'Community Member',
       category: newCat,
       title: newTitle.trim(),
       body: newBody.trim(),
-      upvotes: 1,
-      repliesCount: 0,
-      createdAt: 'Just now',
-      hasUpvoted: true,
+      upvotes: 0,
+      replies_count: 0,
     };
 
-    setPosts([newPost, ...posts]);
-    recordActivity('habit', `Posted in Community: ${newTitle.substring(0, 20)}...`);
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('community_posts')
+        .insert(newPostData)
+        .select()
+        .single();
+
+      if (!error && data) {
+        setPosts([{ ...data, hasUpvoted: false }, ...posts]);
+      }
+    } else {
+      const demoPost = { ...newPostData, id: `p_${Date.now()}`, created_at: new Date().toISOString() } as Post;
+      const next = [demoPost, ...posts];
+      setPosts(next);
+      localStorage.setItem('balance_community_posts', JSON.stringify(next));
+    }
+
     setNewTitle('');
     setNewBody('');
     setIsNewPostModalOpen(false);
@@ -130,7 +153,7 @@ export const Community: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setIsNewPostModalOpen(true)}
+          onClick={startDiscussion}
           className="px-5 py-2.5 rounded-2xl bg-sage-500 hover:bg-sage-600 text-white text-xs font-bold shadow-soft transition flex items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
@@ -157,62 +180,80 @@ export const Community: React.FC = () => {
 
       {/* Posts List */}
       <div className="space-y-4">
-        {filtered.map((post) => (
-          <div
-            key={post.id}
-            className="glass-card rounded-3xl p-6 sm:p-7 shadow-soft border border-sage-200/80 dark:border-ink-700 space-y-4"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <img
-                  src={post.avatar}
-                  alt={post.author}
-                  className="w-10 h-10 rounded-2xl object-cover ring-2 ring-sage-400/30"
-                />
-                <div>
-                  <h4 className="font-heading font-bold text-xs sm:text-sm text-ink-900 dark:text-linen-100">
-                    {post.author}
-                  </h4>
-                  <p className="text-[10px] text-ink-700/60 dark:text-linen-200/60">
-                    {post.role} • {post.createdAt}
-                  </p>
+        {loading ? (
+          <div className="text-center py-20 animate-pulse">
+            <Users className="w-10 h-10 text-sage-300 mx-auto mb-4" />
+            <p className="text-sm text-ink-700/60 dark:text-linen-200/60">Gathering community insights...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20 glass-card rounded-3xl border border-sage-200/60">
+            <Users className="w-10 h-10 text-sage-200 mx-auto mb-4" />
+            <p className="text-sm text-ink-900 dark:text-linen-100 font-bold">No discussions in this category yet.</p>
+            <button
+              onClick={startDiscussion}
+              className="text-xs text-sage-600 font-bold mt-2 hover:underline"
+            >
+              + Start the first conversation
+            </button>
+          </div>
+        ) : (
+          filtered.map((post) => (
+            <div
+              key={post.id}
+              className="glass-card rounded-3xl p-6 sm:p-7 shadow-soft border border-sage-200/80 dark:border-ink-700 space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={post.author_avatar}
+                    alt={post.author_name}
+                    className="w-10 h-10 rounded-2xl object-cover ring-2 ring-sage-400/30"
+                  />
+                  <div>
+                    <h4 className="font-heading font-bold text-xs sm:text-sm text-ink-900 dark:text-linen-100">
+                      {post.author_name}
+                    </h4>
+                    <p className="text-[10px] text-ink-700/60 dark:text-linen-200/60">
+                      {post.author_role} • {new Date(post.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="px-2.5 py-0.5 rounded-full bg-sage-100 dark:bg-sage-950 text-sage-700 dark:text-sage-300 text-[10px] font-bold uppercase">
+                  {post.category}
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-heading font-bold text-base text-ink-900 dark:text-linen-100 mb-2 leading-snug">
+                  {post.title}
+                </h3>
+                <p className="text-xs sm:text-sm text-ink-700/80 dark:text-linen-200/80 leading-relaxed">
+                  {post.body}
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-sage-100 dark:border-ink-800 flex items-center justify-between text-xs">
+                <button
+                  onClick={() => handleUpvote(post.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition ${
+                    post.hasUpvoted
+                      ? 'bg-emerald-50 dark:bg-emerald-950 border-emerald-300 text-emerald-700 dark:text-emerald-300 font-bold'
+                      : 'border-sage-200 dark:border-ink-700 hover:bg-linen-100 text-ink-700 dark:text-linen-200'
+                  }`}
+                >
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                  <span>{post.upvotes} Applaud</span>
+                </button>
+
+                <div className="flex items-center gap-1 text-ink-700/60 dark:text-linen-200/60">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>{post.replies_count} Reflections</span>
                 </div>
               </div>
-
-              <span className="px-2.5 py-0.5 rounded-full bg-sage-100 dark:bg-sage-950 text-sage-700 dark:text-sage-300 text-[10px] font-bold uppercase">
-                {post.category}
-              </span>
             </div>
-
-            <div>
-              <h3 className="font-heading font-bold text-base text-ink-900 dark:text-linen-100 mb-2 leading-snug">
-                {post.title}
-              </h3>
-              <p className="text-xs sm:text-sm text-ink-700/80 dark:text-linen-200/80 leading-relaxed">
-                {post.body}
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-sage-100 dark:border-ink-800 flex items-center justify-between text-xs">
-              <button
-                onClick={() => handleUpvote(post.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition ${
-                  post.hasUpvoted
-                    ? 'bg-emerald-50 dark:bg-emerald-950 border-emerald-300 text-emerald-700 dark:text-emerald-300 font-bold'
-                    : 'border-sage-200 dark:border-ink-700 hover:bg-linen-100 text-ink-700 dark:text-linen-200'
-                }`}
-              >
-                <ThumbsUp className="w-3.5 h-3.5" />
-                <span>{post.upvotes} Applaud</span>
-              </button>
-
-              <div className="flex items-center gap-1 text-ink-700/60 dark:text-linen-200/60">
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>{post.repliesCount} Reflections</span>
-              </div>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* New Post Modal */}

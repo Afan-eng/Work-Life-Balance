@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, Circle, Plus, Flame, Sparkles, Filter, 
   Trash2, X, Target, Calendar, Award 
@@ -7,59 +7,15 @@ import { useStreak } from '../contexts/StreakContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, isSupabaseConfigured, type UserHabitRecord } from '../lib/supabase';
 import confetti from 'canvas-confetti';
+import { getLocalDateKey, shiftDateKey } from '../lib/utils';
 
-const INITIAL_HABITS: UserHabitRecord[] = [
-  {
-    id: 'h_1',
-    user_id: 'usr_demo',
-    title: 'Morning sunlight exposure (10 mins)',
-    category: 'body',
-    frequency: 'daily',
-    streak: 12,
-    completed_today: true,
-    history: [],
-  },
-  {
-    id: 'h_2',
-    user_id: 'usr_demo',
-    title: '25-minute Deep Work Monotasking Sprint',
-    category: 'focus',
-    frequency: 'weekdays',
-    streak: 8,
-    completed_today: true,
-    history: [],
-  },
-  {
-    id: 'h_3',
-    user_id: 'usr_demo',
-    title: '4-4-4-4 Box Breathing reset after lunch',
-    category: 'mind',
-    frequency: 'daily',
-    streak: 6,
-    completed_today: false,
-    history: [],
-  },
-  {
-    id: 'h_4',
-    user_id: 'usr_demo',
-    title: 'Digital curfew & phone off at 9:30 PM',
-    category: 'rest',
-    frequency: 'daily',
-    streak: 4,
-    completed_today: false,
-    history: [],
-  },
-  {
-    id: 'h_5',
-    user_id: 'usr_demo',
-    title: 'Drink 500ml water before coffee',
-    category: 'body',
-    frequency: 'daily',
-    streak: 15,
-    completed_today: true,
-    history: [],
-  },
-];
+const streakFromDates = (dates: string[], today: string) => {
+  const completed = new Set(dates);
+  let cursor = completed.has(today) ? today : shiftDateKey(today, -1);
+  let streak = 0;
+  while (completed.has(cursor)) { streak += 1; cursor = shiftDateKey(cursor, -1); }
+  return streak;
+};
 
 export const HabitTracker: React.FC = () => {
   const { recordActivity } = useStreak();
@@ -86,19 +42,26 @@ export const HabitTracker: React.FC = () => {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          setHabits(data as UserHabitRecord[]);
+          const today = getLocalDateKey();
+          setHabits((data as UserHabitRecord[]).map((habit) => {
+            const history = Array.isArray(habit.history) ? habit.history : [];
+            return { ...habit, history, completed_today: history.includes(today), streak: streakFromDates(history, today) };
+          }));
         }
       } else {
-        // Demo fallback
-        const saved = localStorage.getItem('balance_user_habits');
+        const saved = user ? localStorage.getItem(`balance_user_habits_${user.id}`) : null;
         if (saved) {
           try {
-            setHabits(JSON.parse(saved));
+            const today = getLocalDateKey();
+            setHabits((JSON.parse(saved) as UserHabitRecord[]).map((habit) => {
+              const history = Array.isArray(habit.history) ? habit.history : [];
+              return { ...habit, history, completed_today: history.includes(today), streak: streakFromDates(history, today) };
+            }));
           } catch (e) {
-            setHabits(INITIAL_HABITS);
+            setHabits([]);
           }
         } else {
-          setHabits(INITIAL_HABITS);
+          setHabits([]);
         }
       }
       setLoading(false);
@@ -109,37 +72,32 @@ export const HabitTracker: React.FC = () => {
 
   const saveHabits = async (newHabits: UserHabitRecord[]) => {
     setHabits(newHabits);
-    localStorage.setItem('balance_user_habits', JSON.stringify(newHabits));
+    if (user) localStorage.setItem(`balance_user_habits_${user.id}`, JSON.stringify(newHabits));
   };
 
   const handleToggleHabit = async (id: string) => {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
 
-    const nextCompleted = !habit.completed_today;
+    const today = getLocalDateKey();
+    const history = Array.isArray(habit.history) ? [...habit.history] : [];
+    const nextCompleted = !history.includes(today);
+    const nextHistory = nextCompleted ? [...history, today] : history.filter((date) => date !== today);
     const updatedHabit = {
       ...habit,
       completed_today: nextCompleted,
-      streak: nextCompleted ? habit.streak + 1 : Math.max(0, habit.streak - 1),
+      history: nextHistory,
+      streak: streakFromDates(nextHistory, today),
     };
-
-    const updatedHabits = habits.map(h => h.id === id ? updatedHabit : h);
-    saveHabits(updatedHabits);
+    if (isSupabaseConfigured && user) {
+      const { error } = await supabase.from('user_habits').upsert(updatedHabit);
+      if (error) { alert(`Habit could not be saved: ${error.message}`); return; }
+    }
+    saveHabits(habits.map(h => h.id === id ? updatedHabit : h));
 
     if (nextCompleted) {
-      recordActivity('habit', `Checked habit: ${habit.title}`);
-      try {
-        confetti({
-          particleCount: 40,
-          spread: 60,
-          origin: { y: 0.8 },
-          colors: ['#2F9A5D', '#38B76E', '#FCD466'],
-        });
-      } catch (e) {}
-    }
-
-    if (isSupabaseConfigured && user) {
-      await supabase.from('user_habits').upsert(updatedHabit);
+      recordActivity('habit', `Completed habit: ${habit.title}`);
+      try { confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 }, colors: ['#2F9A5D', '#38B76E', '#FCD466'] }); } catch { /* optional animation */ }
     }
   };
 
@@ -148,7 +106,7 @@ export const HabitTracker: React.FC = () => {
     if (!newTitle.trim()) return;
 
     const newHabit: Partial<UserHabitRecord> = {
-      user_id: user?.id || 'usr_demo',
+      user_id: user?.id || '',
       title: newTitle.trim(),
       category: newCategory,
       frequency: newFrequency,
@@ -167,7 +125,7 @@ export const HabitTracker: React.FC = () => {
       if (!error && data) {
         saveHabits([data as UserHabitRecord, ...habits]);
       }
-    } else {
+    } else if (user) {
       const demoHabit = { ...newHabit, id: `h_${Date.now()}` } as UserHabitRecord;
       saveHabits([demoHabit, ...habits]);
     }
@@ -191,7 +149,7 @@ export const HabitTracker: React.FC = () => {
     : habits.filter((h) => h.category === categoryFilter);
 
   const completedCount = habits.filter((h) => h.completed_today).length;
-  const completionPercentage = Math.round((completedCount / habits.length) * 100);
+  const completionPercentage = habits.length ? Math.round((completedCount / habits.length) * 100) : 0;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
@@ -279,8 +237,7 @@ export const HabitTracker: React.FC = () => {
               + Create your first habit
             </button>
           </div>
-        ) : (
-          filteredHabits.map((habit) => (
+        ) : filteredHabits.map((habit) => (
           <div
             key={habit.id}
             onClick={() => handleToggleHabit(habit.id)}

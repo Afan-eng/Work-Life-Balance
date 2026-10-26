@@ -40,66 +40,48 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_USER_KEY = 'balance_demo_user_profile';
 
-const DEFAULT_DEMO_PROFILE: UserProfile = {
-  id: 'usr_balance_demo_108',
-  email: 'elena.vance@balance.studio',
-  fullName: 'Elena Vance',
+const EMPTY_PROFILE = (id: string, email: string, fullName?: string): UserProfile => ({
+  id,
+  email,
+  fullName: fullName || email.split('@')[0],
   avatarUrl: '/assets/images/hero-focus.jpg',
-  tier: 'premium',
-  tierExpiry: '2027-10-25',
-  billingHistory: [
-    {
-      id: 'inv_8831',
-      date: '2026-10-15',
-      amount: 1499,
-      description: 'Annual Balance Sanctuary Pass (Razorpay)',
-      status: 'paid',
-    },
-    {
-      id: 'inv_7204',
-      date: '2026-09-02',
-      amount: 499,
-      description: 'Somatic Breathwork Masterclass Pass',
-      status: 'paid',
-    },
-  ],
+  tier: 'free',
+  billingHistory: [],
+});
+
+const readProfile = (): UserProfile | null => {
+  try {
+    const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+    return saved ? JSON.parse(saved) as UserProfile : null;
+  } catch {
+    localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    return null;
+  }
 };
+
+const makeDemoUser = (profile: UserProfile): User => ({
+  id: profile.id,
+  app_metadata: { provider: 'email', providers: ['email'] },
+  user_metadata: { full_name: profile.fullName },
+  aud: 'authenticated',
+  created_at: new Date().toISOString(),
+  email: profile.email,
+} as User);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return DEFAULT_DEMO_PROFILE;
-      }
-    }
-    // Default logged in demo experience so evaluator immediately sees full power
-    return DEFAULT_DEMO_PROFILE;
-  });
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup' | 'forgot'>('login');
 
   useEffect(() => {
     if (isSupabaseConfigured) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
         setSession(session);
         setUser(session?.user ?? null);
-        if (session?.user) {
-          const userMeta = session.user.user_metadata;
-          setProfile({
-            id: session.user.id,
-            email: session.user.email || '',
-            fullName: userMeta?.full_name || session.user.email?.split('@')[0] || 'Mindful Member',
-            avatarUrl: userMeta?.avatar_url || '/assets/images/hero-focus.jpg',
-            tier: 'free',
-            billingHistory: [],
-          });
-        }
+        if (session?.user) await loadAccountProfile(session.user);
         setLoading(false);
       });
 
@@ -108,30 +90,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } = supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        if (session?.user) {
-          const userMeta = session.user.user_metadata;
-          setProfile(prev => ({
-            id: session.user.id,
-            email: session.user.email || '',
-            fullName: userMeta?.full_name || prev?.fullName || 'Mindful Member',
-            avatarUrl: userMeta?.avatar_url || prev?.avatarUrl || '/assets/images/hero-focus.jpg',
-            tier: prev?.tier || 'free',
-            billingHistory: prev?.billingHistory || [],
-          }));
-        }
-        setLoading(false);
+        if (session?.user) void loadAccountProfile(session.user);
+        else { setProfile(null); setLoading(false); }
       });
 
       return () => subscription.unsubscribe();
     } else {
+      const cachedProfile = readProfile();
+      setProfile(cachedProfile);
+      setUser(cachedProfile ? makeDemoUser(cachedProfile) : null);
       setLoading(false);
     }
   }, []);
 
-  // Save profile changes to local storage for demo persistence
+  const loadAccountProfile = async (account: User) => {
+    const userMeta = account.user_metadata;
+    const cached = readProfile();
+    let billingHistory = cached?.id === account.id ? cached.billingHistory : [];
+    let tier: UserProfile['tier'] = cached?.id === account.id ? cached.tier : 'free';
+    let tierExpiry = cached?.id === account.id ? cached.tierExpiry : undefined;
+    const { data: payments } = await supabase.from('payments').select('*').eq('user_id', account.id).eq('status', 'paid').order('created_at', { ascending: false });
+    if (payments) {
+      billingHistory = payments.map((payment: any) => ({ id: payment.id, date: payment.created_at.slice(0, 10), amount: Number(payment.amount), description: payment.item_name, status: 'paid' as const }));
+      if (payments.some((payment: any) => payment.item_type === 'subscription')) tier = 'premium';
+    }
+    setProfile({ id: account.id, email: account.email || '', fullName: userMeta?.full_name || cached?.fullName || account.email?.split('@')[0] || 'Mindful Member', avatarUrl: userMeta?.avatar_url || cached?.avatarUrl || '/assets/images/hero-focus.jpg', tier, tierExpiry, billingHistory });
+    setLoading(false);
+  };
+
+  // Save profile changes locally for offline/demo sessions.
   useEffect(() => {
-    if (profile) {
+    if (profile && !isSupabaseConfigured) {
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(profile));
+    } else if (!isSupabaseConfigured) {
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
     }
   }, [profile]);
 
@@ -153,23 +145,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Demo sign in simulation
-    const simulatedProfile: UserProfile = {
-      id: `usr_${Date.now()}`,
-      email,
-      fullName: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      avatarUrl: '/assets/images/hero-focus.jpg',
-      tier: 'premium',
-      billingHistory: [
-        {
-          id: `inv_${Math.floor(1000 + Math.random() * 9000)}`,
-          date: new Date().toISOString().split('T')[0],
-          amount: 1499,
-          description: 'Balance Sanctuary Pass',
-          status: 'paid',
-        },
-      ],
-    };
+    const savedProfiles = JSON.parse(localStorage.getItem('balance_demo_profiles') || '{}') as Record<string, UserProfile>;
+    const simulatedProfile = savedProfiles[email.toLowerCase()] || EMPTY_PROFILE(`usr_${email.toLowerCase()}`, email, email.split('@')[0].replace(/[._]/g, ' '));
+    savedProfiles[email.toLowerCase()] = simulatedProfile;
+    localStorage.setItem('balance_demo_profiles', JSON.stringify(savedProfiles));
     setProfile(simulatedProfile);
+    setUser(makeDemoUser(simulatedProfile));
     closeAuthModal();
     return {};
   };
@@ -187,15 +168,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Demo sign up
-    const newProfile: UserProfile = {
-      id: `usr_${Date.now()}`,
-      email,
-      fullName,
-      avatarUrl: '/assets/images/outdoor-reset.jpg',
-      tier: 'free',
-      billingHistory: [],
-    };
+    const savedProfiles = JSON.parse(localStorage.getItem('balance_demo_profiles') || '{}') as Record<string, UserProfile>;
+    if (savedProfiles[email.toLowerCase()]) return { error: 'An account with this email already exists. Please sign in.' };
+    const newProfile = EMPTY_PROFILE(`usr_${email.toLowerCase()}`, email, fullName);
+    savedProfiles[email.toLowerCase()] = newProfile;
+    localStorage.setItem('balance_demo_profiles', JSON.stringify(savedProfiles));
     setProfile(newProfile);
+    setUser(makeDemoUser(newProfile));
     closeAuthModal();
     return {};
   };
@@ -211,23 +190,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Demo Google sign in simulation
-    const googleProfile: UserProfile = {
-      id: 'usr_google_mindful_42',
-      email: 'alex.rivers@gmail.com',
-      fullName: 'Alex Rivers',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-      tier: 'premium',
-      billingHistory: [
-        {
-          id: 'inv_ggl_912',
-          date: '2026-10-01',
-          amount: 1499,
-          description: 'Annual Balance Membership (Razorpay)',
-          status: 'paid',
-        },
-      ],
-    };
+    const savedProfiles = JSON.parse(localStorage.getItem('balance_demo_profiles') || '{}') as Record<string, UserProfile>;
+    const googleProfile = savedProfiles['alex.rivers@gmail.com'] || EMPTY_PROFILE('usr_google_mindful_42', 'alex.rivers@gmail.com', 'Alex Rivers');
+    savedProfiles['alex.rivers@gmail.com'] = googleProfile;
+    localStorage.setItem('balance_demo_profiles', JSON.stringify(savedProfiles));
     setProfile(googleProfile);
+    setUser(makeDemoUser(googleProfile));
     closeAuthModal();
     return {};
   };

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Award, CheckCircle2, FileCheck, Printer, ShieldCheck, UserCheck, Sparkles, Building } from 'lucide-react';
 
 export const FacultyEvaluation: React.FC = () => {
-  const [examinerName, setExaminerName] = useState('Balance Studio Evaluator');
+  const [examinerName, setExaminerName] = useState('Balance Compass Evaluator');
   const [designation, setDesignation] = useState('Community Program Evaluator');
   const [internalMarks, setInternalMarks] = useState({
     needAssessment: 10,
@@ -38,7 +38,7 @@ export const FacultyEvaluation: React.FC = () => {
           Faculty Evaluation & Rubric Sheet
         </h1>
         <p className="text-xs sm:text-sm text-ink-700/70 dark:text-linen-200/70">
-          Official grading rubric and examiner sign-off sheet for Balance Studio Community Program evaluation and assessment.
+          Official grading rubric and examiner sign-off sheet for Balance Compass Community Program evaluation and assessment.
         </p>
       </div>
 
@@ -192,7 +192,7 @@ export const FacultyEvaluation: React.FC = () => {
           <div className="p-8 sm:p-12 bg-white text-ink-950 border-4 border-sage-700 rounded-3xl shadow-lift space-y-6">
             <div className="text-center border-b-2 border-sage-200 pb-4 space-y-1">
               <span className="text-xs font-bold uppercase tracking-widest text-sage-800">
-                Balance Studio Community • Program Evaluation Committee
+                Balance Compass Community • Program Evaluation Committee
               </span>
               <h2 className="text-2xl font-serif font-black">
                 COMMUNITY PROGRAM ASSESSMENT SHEET
@@ -202,8 +202,8 @@ export const FacultyEvaluation: React.FC = () => {
 
             <div className="grid grid-cols-2 text-xs border-b border-sage-200 pb-4">
               <div>
-                <p><strong>Project Title:</strong> Balance Studio Platform</p>
-                <p><strong>Affiliated Organization:</strong> Balance Studio Community</p>
+                <p><strong>Project Title:</strong> Balance Compass Platform</p>
+                <p><strong>Affiliated Organization:</strong> Balance Compass Community</p>
               </div>
               <div className="text-right">
                 <p><strong>Evaluation Status:</strong> Verified & Complete</p>

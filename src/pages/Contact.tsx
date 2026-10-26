@@ -10,11 +10,13 @@ export const Contact: React.FC = () => {
   const [isUrgent, setIsUrgent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [statusError, setStatusError] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setStatusMsg('');
+    setStatusError(false);
 
     try {
       const res = await sendContactInquiryViaN8n({
@@ -26,12 +28,16 @@ export const Contact: React.FC = () => {
       });
 
       setStatusMsg(res.message);
-      setName('');
-      setEmail('');
-      setMessage('');
-      setIsUrgent(false);
+      setStatusError(!res.success);
+      if (res.success) {
+        setName('');
+        setEmail('');
+        setMessage('');
+        setIsUrgent(false);
+      }
     } catch (err: any) {
-      setStatusMsg('Thank you. Your inquiry has been dispatched to our n8n concierge workflow.');
+      setStatusError(true);
+      setStatusMsg('We could not send this message right now. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -59,16 +65,16 @@ export const Contact: React.FC = () => {
           <PhoneCall className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div>
             <h3 className="font-heading font-bold text-sm text-amber-900 dark:text-amber-200">
-              Immediate Crisis Helplines (24/7 Free & Confidential)
+              Support in India
             </h3>
             <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-1">
-              If you or someone you know is in acute distress or experiencing suicidal thoughts, please call or text <strong>988</strong> (USA & Canada) or contact your local emergency service.
+              For mental health support, call Tele-MANAS at <a className="font-bold underline" href="tel:14416">14416</a> or <a className="font-bold underline" href="tel:18008914416">1800-89-14416</a>. For an immediate emergency in India, call <a className="font-bold underline" href="tel:112">112</a>. This website is not an emergency service.
             </p>
           </div>
         </div>
 
         <span className="font-mono text-xs font-bold bg-amber-200/80 dark:bg-amber-900 px-3 py-1 rounded-xl text-amber-950 dark:text-amber-100 shrink-0">
-          Dial 988 Anytime
+          Tele-MANAS · 14416
         </span>
       </div>
 
@@ -80,8 +86,8 @@ export const Contact: React.FC = () => {
         </h2>
 
         {statusMsg && (
-          <div className="mb-6 p-4 rounded-2xl bg-sage-50 dark:bg-sage-950/60 border border-sage-200 dark:border-sage-800 text-xs sm:text-sm text-sage-800 dark:text-sage-200 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-sage-600 shrink-0" />
+          <div role={statusError ? 'alert' : 'status'} className={`mb-6 p-4 rounded-2xl border text-xs sm:text-sm flex items-center gap-2 ${statusError ? 'bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950 dark:border-rose-800 dark:text-rose-200' : 'bg-sage-50 dark:bg-sage-950/60 border-sage-200 dark:border-sage-800 text-sage-800 dark:text-sage-200'}`}>
+            {statusError ? <ShieldAlert className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 text-sage-600 shrink-0" />}
             <span>{statusMsg}</span>
           </div>
         )}

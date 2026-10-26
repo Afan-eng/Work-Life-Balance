@@ -1,200 +1,98 @@
-import React, { useState } from 'react';
-import { Calendar, Users, Clock, Award, Sparkles, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react';
-import { openRazorpayCheckout } from '../lib/razorpay';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, MessageCircle, Sparkles, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { Link } from 'react-router-dom';
 
-interface EventItem {
-  id: string;
-  title: string;
-  date: string;
-  time: string;
-  host: string;
-  hostRole: string;
-  price: number;
-  currency: string;
-  spotsLeft: number;
-  image: string;
-  description: string;
-  agenda: string[];
-}
-
-const EVENTS: EventItem[] = [
-  {
-    id: 'evt_1',
-    title: 'Somatic Breathwork & Deep Nervous System Release',
-    date: 'Thursday, Nov 12',
-    time: '7:00 PM – 8:30 PM EST',
-    host: 'Dr. Soraya Kim & Elena Vance',
-    hostRole: 'Integrative Neuroscientist & Studio Guide',
-    price: 499,
-    currency: 'INR',
-    spotsLeft: 4,
-    image: '/assets/images/outdoor-reset.jpg',
-    description: 'An immersive 90-minute live somatic session guiding participants through parasympathetic activation, vagal resets, and restorative sleep priming.',
-    agenda: [
-      'Welcome & Heart-Rate Variability (HRV) Priming',
-      'The 4-Stage Box Breathing progression',
-      'Gentle psoas release for desk workers',
-      'Q&A on chronic anxiety and emotional resilience',
-    ],
-  },
-  {
-    id: 'evt_2',
-    title: 'Digital Minimalism: The 7-Day Screen Time Audit Masterclass',
-    date: 'Saturday, Nov 14',
-    time: '11:00 AM – 1:00 PM EST',
-    host: 'Marcus Vance',
-    hostRole: 'Digital Sovereignty Lead',
-    price: 699,
-    currency: 'INR',
-    spotsLeft: 8,
-    image: '/assets/images/serenity-work-banner.jpg',
-    description: 'Reconfigure your relationship with connected devices. Audit dopamine addiction triggers and implement non-negotiable personal boundaries.',
-    agenda: [
-      'Screen time audit breakdown and subconscious triggers',
-      'Re-engineering iOS/Android interfaces into greyscale calm',
-      'Creating ironclad evening shutdown rituals',
-      'Live workspace inspection and teardown',
-    ],
-  },
-  {
-    id: 'evt_3',
-    title: 'Communal Plant-Based Cooking & Mindful Table Circle',
-    date: 'Sunday, Nov 22',
-    time: '6:00 PM – 8:00 PM EST',
-    host: 'Chef Amina Noor',
-    hostRole: 'Culinary Mindfulness Specialist',
-    price: 299,
-    currency: 'INR',
-    spotsLeft: 12,
-    image: '/assets/images/community-family.jpg',
-    description: 'Cook together virtually in real time. Learn the art of slow ancestral cooking, conscious chewing, and digestive parasympathetic alignment.',
-    agenda: [
-      'Pre-cooking breathing meditation and ingredient blessing',
-      'Step-by-step preparation of Anti-Inflammatory Hearth Bowl',
-      'Mindful chewing and gut-brain biochemical connection',
-      'Shared gratitude table circle',
-    ],
-  },
+const PROGRAMS = [
+  { id: 'focus-reset', kind: 'Workshop', title: 'Focused work, humane pace', length: '25 min', startsAt: '2026-10-29T18:00:00+05:30', endsAt: '2026-10-29T18:25:00+05:30', description: 'A guided planning session to choose one priority, reduce distractions and protect a real break.', steps: ['Name the one task that matters most today', 'Break it into a first 15-minute action', 'Set a finish line and a recovery break'] },
+  { id: 'workday-boundaries', kind: 'Workshop', title: 'Build a kinder workday boundary', length: '20 min', startsAt: '2026-10-30T18:00:00+05:30', endsAt: '2026-10-30T18:20:00+05:30', description: 'Create a practical start-up and shut-down ritual that fits your actual work situation.', steps: ['Notice what pulls work into personal time', 'Choose one boundary you can realistically test', 'Write a shutdown cue and a hand-off note'] },
+  { id: 'body-reset', kind: 'Workshop', title: 'Desk-to-body reset', length: '12 min', startsAt: '2026-10-31T10:00:00+05:30', endsAt: '2026-10-31T10:12:00+05:30', description: 'A gentle sequence for moving, looking away from screens and checking what your body needs.', steps: ['Stand or change position if comfortable', 'Rest your eyes on something distant', 'Choose a movement that suits your body'] },
+  { id: 'weekly-circle', kind: 'Community circle', title: 'Weekly balance check-in', length: '30 min · self-guided', startsAt: '2026-11-01T10:00:00+05:30', endsAt: '2026-11-01T10:30:00+05:30', description: 'A small-group conversation format you can use with colleagues, friends or your own journal.', steps: ['What gave you energy this week?', 'Where did work spill into rest?', 'What one small experiment will you try next week?'] },
+  { id: 'care-circle', kind: 'Community circle', title: 'Care, boundaries & belonging', length: '30 min · self-guided', startsAt: '2026-11-04T19:00:00+05:30', endsAt: '2026-11-04T19:30:00+05:30', description: 'A respectful prompt set for discussing boundaries and mutual support without pressure to disclose personal details.', steps: ['Share one thing that helps you feel included', 'What makes it easier to ask for a pause?', 'Offer one practical support, without fixing'] },
 ];
 
-export const Events: React.FC = () => {
-  const { profile } = useAuth();
-  const [bookedEvents, setBookedEvents] = useState<string[]>([]);
+const formatSlot = (start: string, end: string) => {
+  const day = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(start));
+  const time = (value: string) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
+  return `${day} · ${time(start)}–${time(end)} IST`;
+};
 
-  const handleBook = (eventItem: EventItem) => {
-    openRazorpayCheckout({
-      amount: eventItem.price,
-      currency: eventItem.currency,
-      itemName: eventItem.title,
-      itemType: 'workshop_pass',
-      userEmail: profile?.email || 'guest@balance.studio',
-      userName: profile?.fullName || 'Balance Seeker',
-      onSuccess: (res) => {
-        setBookedEvents(prev => [...prev, eventItem.id]);
-        alert(`Success! Pass booked with Razorpay ID: ${res.paymentId}. A confirmation receipt and live studio link have been sent.`);
-      },
+export const Events: React.FC = () => {
+  const { user, openAuthModal } = useAuth();
+  const [active, setActive] = useState<(typeof PROGRAMS)[number] | null>(null);
+  const [joined, setJoined] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`balance_circle_interest_${user?.id || 'guest'}`) || '[]') as string[]; } catch { return []; }
+  });
+  const [completed, setCompleted] = useState<string[]>([]);
+  const [toast, setToast] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const workshops = useMemo(() => PROGRAMS.filter(item => item.kind === 'Workshop'), []);
+  const circles = useMemo(() => PROGRAMS.filter(item => item.kind === 'Community circle'), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setJoined([]); setCompleted([]);
+    if (!user) return;
+    if (isSupabaseConfigured) void Promise.all([
+      supabase.from('workshop_interests').select('program_id').eq('user_id', user.id),
+      supabase.from('workshop_completions').select('program_id').eq('user_id', user.id),
+    ]).then(([interests, finishes]) => {
+      if (cancelled) return;
+      if (interests.data) setJoined(interests.data.map((row: { program_id: string }) => row.program_id));
+      if (finishes.data) setCompleted(finishes.data.map((row: { program_id: string }) => row.program_id));
     });
+    else {
+      try { setJoined(JSON.parse(localStorage.getItem(`balance_circle_interest_${user.id}`) || '[]') as string[]); } catch { setJoined([]); }
+      try { setCompleted(JSON.parse(localStorage.getItem(`balance_workshop_completions_${user.id}`) || '[]') as string[]); } catch { setCompleted([]); }
+    }
+    return () => { cancelled = true; };
+  }, [user]);
+
+  const join = async (id: string) => {
+    if (!user) { openAuthModal('login'); return; }
+    setSaveError(''); setSaving(true);
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('workshop_interests').upsert({ user_id: user.id, program_id: id }, { onConflict: 'user_id,program_id' });
+      if (error) { setSaveError('Could not save your interest. Apply the productivity migration and try again.'); setSaving(false); return; }
+    }
+    const next = joined.includes(id) ? joined : [...joined, id];
+    setJoined(next);
+    if (!isSupabaseConfigured) localStorage.setItem(`balance_circle_interest_${user.id}`, JSON.stringify(next));
+    setSaving(false);
+    setToast('Interest saved. This is a suggested slot; no live host or meeting link is provided.');
+    window.setTimeout(() => setToast(''), 4500);
   };
 
-  return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
-      {/* Header */}
-      <div className="text-center max-w-2xl mx-auto space-y-3">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sage-100 dark:bg-sage-950/60 text-sage-700 dark:text-sage-300 text-xs font-semibold">
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Interactive Live Sessions</span>
-        </div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold font-heading text-ink-900 dark:text-linen-100">
-          Workshops & Community Circles
-        </h1>
-        <p className="text-xs sm:text-sm text-ink-700/70 dark:text-linen-200/70">
-          Gather with peers and guided somatic facilitators. Real-time pass checkout via Razorpay with automated calendar confirmation.
-        </p>
-      </div>
+  const finish = async (id: string) => {
+    if (!user) { openAuthModal('login'); return; }
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('workshop_completions').upsert({ user_id: user.id, program_id: id }, { onConflict: 'user_id,program_id' });
+      if (error) { setSaveError('Could not save completion. Apply the productivity migration and try again.'); return; }
+    } else localStorage.setItem(`balance_workshop_completions_${user.id}`, JSON.stringify([...new Set([...completed, id])]));
+    setCompleted(current => current.includes(id) ? current : [...current, id]);
+    setActive(null);
+    setToast('Workshop guide marked complete.');
+    window.setTimeout(() => setToast(''), 3500);
+  };
 
-      {/* Events List */}
-      <div className="space-y-8">
-        {EVENTS.map((evt) => {
-          const isBooked = bookedEvents.includes(evt.id);
-          return (
-            <div
-              key={evt.id}
-              className="glass-card rounded-3xl overflow-hidden shadow-soft border border-sage-200/80 dark:border-ink-700 flex flex-col md:flex-row"
-            >
-              <div className="md:w-80 h-64 md:h-auto relative overflow-hidden shrink-0">
-                <img
-                  src={evt.image}
-                  alt={evt.title}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute top-4 left-4 bg-ink-900/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold">
-                  ₹{evt.price} / Pass
-                </div>
-              </div>
-
-              <div className="p-6 sm:p-8 flex-1 flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-ink-700/60 dark:text-linen-200/60 mb-2">
-                    <span className="font-bold text-sage-600 dark:text-sage-400 bg-sage-100 dark:bg-sage-950 px-2.5 py-0.5 rounded-full">
-                      {evt.date}
-                    </span>
-                    <span className="flex items-center gap-1 font-mono">
-                      <Clock className="w-3 h-3" /> {evt.time}
-                    </span>
-                  </div>
-
-                  <h3 className="font-heading font-extrabold text-xl text-ink-900 dark:text-linen-100">
-                    {evt.title}
-                  </h3>
-                  <p className="text-xs text-sage-600 dark:text-sage-400 font-medium mt-0.5">
-                    Led by {evt.host} • {evt.hostRole}
-                  </p>
-                  <p className="text-xs sm:text-sm text-ink-700/80 dark:text-linen-200/80 mt-3 leading-relaxed">
-                    {evt.description}
-                  </p>
-
-                  {/* Agenda Highlights */}
-                  <div className="mt-4 pt-3 border-t border-sage-100 dark:border-ink-800">
-                    <span className="text-[11px] font-bold text-ink-800 dark:text-linen-200 uppercase tracking-wide block mb-2">
-                      Masterclass Agenda:
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-ink-700/70 dark:text-linen-200/70">
-                      {evt.agenda.map((ag, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span>{ag}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-sage-100 dark:border-ink-800 flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                    🔥 Only {evt.spotsLeft} passes remaining
-                  </span>
-
-                  {isBooked ? (
-                    <div className="px-5 py-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>Pass Confirmed</span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleBook(evt)}
-                      className="px-6 py-2.5 rounded-xl bg-sage-500 hover:bg-sage-600 text-white text-xs font-bold shadow-soft hover:shadow-lift transition flex items-center gap-2"
-                    >
-                      <span>Book with Razorpay (₹{evt.price})</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+  const programCard = (item: (typeof PROGRAMS)[number]) => (
+      <article key={item.id} className="flex flex-col rounded-3xl border border-sage-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lift dark:border-ink-700 dark:bg-ink-900">
+      <div className="flex items-center justify-between"><span className="rounded-full bg-sage-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-sage-800 dark:bg-sage-950 dark:text-sage-200">{item.kind}</span><span className="inline-flex items-center gap-1 text-xs text-ink-700/60 dark:text-linen-200/60"><Clock3 className="h-3.5 w-3.5"/>{item.length}</span></div>
+      <h3 className="mt-4 font-heading text-xl font-bold text-ink-900 dark:text-linen-100">{item.title}</h3><p className="mt-2 flex-1 text-sm leading-6 text-ink-700/70 dark:text-linen-200/70">{item.description}</p>
+      <div className="mt-4 flex items-start gap-2 rounded-xl bg-linen-100 p-3 text-xs text-ink-700 dark:bg-ink-950 dark:text-linen-200"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-sage-700"/><span><strong>Suggested slot · India time</strong><br/>{formatSlot(item.startsAt, item.endsAt)}<br/><span className="opacity-70">Self-guided / participant-led; no host or meeting link.</span></span></div>
+      {completed.includes(item.id) && <p className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4"/>Completed</p>}
+      <div className="mt-5 flex gap-2"><button onClick={() => setActive(item)} className="inline-flex items-center gap-2 rounded-xl bg-sage-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-sage-800">Open guide <ArrowRight className="h-4 w-4"/></button>{item.kind === 'Community circle' && <button disabled={saving} onClick={() => void join(item.id)} className="rounded-xl border border-sage-300 px-4 py-2.5 text-xs font-bold text-sage-800 disabled:opacity-50 dark:border-ink-600 dark:text-sage-200">{joined.includes(item.id) ? 'Interest saved ✓' : saving ? 'Saving…' : 'Save interest'}</button>}</div>
+    </article>
   );
+
+  return <div className="mx-auto max-w-6xl space-y-10 px-4 py-10 sm:px-6 lg:px-8">
+    <section className="rounded-[2rem] bg-gradient-to-br from-ink-950 via-ink-900 to-sage-950 p-8 text-white shadow-lift sm:p-11"><div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs"><Users className="h-4 w-4"/> Workshops & circles · IST</div><h1 className="mt-5 font-heading text-4xl font-extrabold">Learn together. Rest together.</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-white/75">Practical workshop kits and community circle prompts, with suggested India time slots. Guides are self-led and circles are participant-led; live hosting and meeting links are not currently provided.</p><Link to="/community" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-ink-900 transition hover:bg-sage-100">Join the community <ArrowRight className="h-4 w-4"/></Link></section>
+    <section className="space-y-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-sage-100 text-sage-800 dark:bg-sage-950 dark:text-sage-200"><BookOpenCheck className="h-5 w-5"/></span><div><h2 className="font-heading text-2xl font-bold text-ink-900 dark:text-linen-100">Guided workshops</h2><p className="text-xs text-ink-700/60 dark:text-linen-200/60">Short activities to plan sustainable work and recovery.</p></div></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{workshops.map(programCard)}</div></section>
+    <section className="space-y-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-sage-100 text-sage-800 dark:bg-sage-950 dark:text-sage-200"><MessageCircle className="h-5 w-5"/></span><div><h2 className="font-heading text-2xl font-bold text-ink-900 dark:text-linen-100">Community circle guides</h2><p className="text-xs text-ink-700/60 dark:text-linen-200/60">Suggested dates and times for groups you organize; save interest to keep the circle on your list.</p></div></div><div className="grid gap-4 md:grid-cols-2">{circles.map(programCard)}</div></section>
+    <aside className="flex gap-3 rounded-2xl border border-sage-200 bg-sage-50 p-4 text-xs leading-5 text-ink-700 dark:border-ink-700 dark:bg-ink-900 dark:text-linen-200"><Sparkles className="h-4 w-4 shrink-0 text-sage-700 dark:text-sage-300"/><p>Participation is optional. Skip any prompt that does not feel right, avoid sharing confidential workplace details, and seek professional support for urgent or serious concerns.</p></aside>
+    {saveError && <div role="alert" className="fixed bottom-5 right-5 z-50 max-w-sm rounded-2xl bg-rose-800 p-4 text-sm text-white shadow-lift">{saveError}</div>}{toast && <div role="status" className="fixed bottom-5 right-5 z-50 max-w-sm rounded-2xl bg-ink-900 p-4 text-sm text-white shadow-lift">{toast}</div>}
+    {active && <div className="fixed inset-0 z-50 grid place-items-center bg-ink-950/75 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby="program-title" className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-lift dark:bg-ink-900 sm:p-8"><div className="flex items-start justify-between gap-4"><div><span className="text-xs font-bold uppercase tracking-widest text-sage-700 dark:text-sage-300">{active.kind} · {active.length}</span><h2 id="program-title" className="mt-2 font-heading text-2xl font-extrabold text-ink-900 dark:text-linen-100">{active.title}</h2></div><button onClick={() => setActive(null)} aria-label="Close guide" className="rounded-lg px-3 py-2 text-sm hover:bg-linen-100 dark:hover:bg-ink-800">Close</button></div><p className="mt-4 text-sm leading-6 text-ink-700 dark:text-linen-200">{active.description}</p><ol className="mt-6 space-y-3">{active.steps.map((step, index) => <li key={step} className="flex gap-3 rounded-xl bg-linen-100 p-4 text-sm leading-5 dark:bg-ink-950"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sage-700 text-xs font-bold text-white">{index + 1}</span>{step}</li>)}</ol><div className="mt-6 flex gap-2 rounded-xl border border-sage-200 p-4 text-xs leading-5 text-ink-700 dark:border-ink-700 dark:text-linen-200"><CalendarDays className="h-4 w-4 shrink-0"/>Take one idea into your schedule if it suits your day. Use Personal Schedule to set a reminder.</div><button onClick={() => void finish(active.id)} className="mt-6 w-full rounded-xl bg-sage-700 px-4 py-3 text-sm font-bold text-white">{completed.includes(active.id) ? 'Completed ✓' : 'Finish & mark complete'} <CheckCircle2 className="ml-1 inline h-4 w-4"/></button></div></div>}
+  </div>;
 };

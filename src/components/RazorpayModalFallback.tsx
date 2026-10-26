@@ -82,7 +82,7 @@ export const RazorpayModalFallback: React.FC = () => {
                 <span className="font-heading font-bold text-sm tracking-wide">Razorpay</span>
                 <span className="text-[10px] bg-blue-500/30 text-blue-300 px-1.5 py-0.5 rounded font-mono">TEST MODE</span>
               </div>
-              <p className="text-xs text-white/70">Balance Studio Secure Checkout</p>
+              <p className="text-xs text-white/70">Local demo checkout · no charge is made</p>
             </div>
           </div>
           <button
@@ -180,7 +180,7 @@ export const RazorpayModalFallback: React.FC = () => {
                 className="w-full mt-3 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-soft hover:shadow-lift transition"
               >
                 <Lock className="w-4 h-4" />
-                <span>Pay {modalData.currency === 'USD' ? '$' : '₹'}{modalData.amount.toLocaleString()} via Razorpay</span>
+                <span>Simulate demo payment · {modalData.currency === 'USD' ? '$' : '₹'}{modalData.amount.toLocaleString()}</span>
               </button>
             </div>
           )}
@@ -203,10 +203,10 @@ export const RazorpayModalFallback: React.FC = () => {
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h4 className="font-heading font-bold text-xl text-ink-900 dark:text-linen-100">
-                Payment Successful!
+                Demo payment simulated
               </h4>
               <p className="text-xs text-ink-700/70 dark:text-linen-200/70">
-                Webhook validated. Your membership pass and booking are now active in Supabase.
+                This is a local preview only. No payment was processed and no server verified this order.
               </p>
             </div>
           )}

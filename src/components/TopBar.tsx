@@ -49,7 +49,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
 
             <Link to="/" className="flex items-center gap-2.5">
               <span className="font-heading font-extrabold text-lg sm:text-xl text-ink-900 dark:text-linen-100 tracking-tight">
-                Balance<span className="text-sage-600 dark:text-sage-400 font-light">Studio</span>
+                Balance<span className="text-sage-600 dark:text-sage-400 font-light">Compass</span>
               </span>
               <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 text-[10px] font-bold border border-amber-300 dark:border-amber-800">
                 <Award className="w-3 h-3 text-amber-600" />

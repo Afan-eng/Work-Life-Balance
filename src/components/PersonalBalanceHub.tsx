@@ -102,7 +102,7 @@ export const PersonalBalanceHub: React.FC = () => {
   // 4. Needs Grid States
   const [needs, setNeeds] = useState({
     hydration: false,
-    posture: true,
+    posture: false,
     freshAir: false,
     breathwork: false,
   });

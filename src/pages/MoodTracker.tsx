@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Smile, Sparkles, Plus, Calendar, Tag, CheckCircle2, History, Heart, ArrowRight } from 'lucide-react';
 import { useStreak } from '../contexts/StreakContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -42,29 +42,12 @@ export const MoodTracker: React.FC = () => {
         if (!error && data) {
           setHistory(data as UserMoodLogRecord[]);
         }
+      } else if (user) {
+        try {
+          setHistory(JSON.parse(localStorage.getItem(`balance_moods_${user.id}`) || '[]'));
+        } catch { setHistory([]); }
       } else {
-        // Demo fallback
-        const demoHistory = [
-          {
-            id: 'mood_1',
-            user_id: 'usr_demo',
-            score: 4,
-            label: 'Energized',
-            tags: ['Deep Work', 'Hydration'],
-            note: 'Completed 2 productive Pomodoro sprints after a brisk morning walk. Mind felt exceptionally sharp.',
-            created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-          },
-          {
-            id: 'mood_2',
-            user_id: 'usr_demo',
-            score: 3,
-            label: 'Balanced',
-            tags: ['Nature Walk', 'Restful Sleep'],
-            note: 'Took 20 minutes to sit by the garden without phone. Softened the edge of afternoon fatigue.',
-            created_at: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-          },
-        ];
-        setHistory(demoHistory as UserMoodLogRecord[]);
+        setHistory([]);
       }
       setLoading(false);
     };
@@ -85,11 +68,6 @@ export const MoodTracker: React.FC = () => {
     const currentLevel =
       MOOD_LEVELS.find(m => m.score === selectedScore) || MOOD_LEVELS[2];
 
-    if (!isSupabaseConfigured) {
-      alert('Supabase is not configured. Please check your .env settings.');
-      return;
-    }
-
     if (!user?.id) {
       alert('Please sign in before saving your mood entry.');
       return;
@@ -104,6 +82,17 @@ export const MoodTracker: React.FC = () => {
       note: journalNote,
       created_at: new Date().toISOString(),
     };
+
+    if (!isSupabaseConfigured) {
+      const next = [newRecord, ...history];
+      setHistory(next);
+      localStorage.setItem(`balance_moods_${user.id}`, JSON.stringify(next));
+      recordActivity('mood', `Logged mood: ${currentLevel.label} (${selectedScore}/5)`);
+      setIsLoggedSuccess(true);
+      setJournalNote('');
+      setTimeout(() => setIsLoggedSuccess(false), 3000);
+      return;
+    }
 
     const { data, error } = await supabase
       .from('user_mood_logs')
@@ -222,7 +211,7 @@ export const MoodTracker: React.FC = () => {
           <div className="flex items-center justify-between pt-4 border-t border-sage-100 dark:border-ink-800">
             <div className="flex items-center gap-2 text-xs text-ink-700/60 dark:text-linen-200/60">
               <Sparkles className="w-4 h-4 text-warmAmber-500" />
-              <span>Logging increments your 7-day streak</span>
+              <span>Logging updates your personal streak</span>
             </div>
 
             <button
@@ -268,8 +257,7 @@ export const MoodTracker: React.FC = () => {
               <History className="w-8 h-8 text-sage-200 mx-auto mb-2" />
               <p className="text-xs text-ink-700/60 dark:text-linen-200/60">Your reflection history will appear here.</p>
             </div>
-          ) : (
-            history.map((record) => (
+          ) : history.map((record) => (
             <div
               key={record.id}
               className="glass-card rounded-2xl p-5 border border-sage-200/70 dark:border-ink-700 shadow-soft space-y-3"

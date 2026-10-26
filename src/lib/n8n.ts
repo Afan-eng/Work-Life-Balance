@@ -1,5 +1,5 @@
 /**
- * Balance Studio - n8n Webhook Client
+ * Balance Compass - n8n Webhook Client
  * Orchestrates AI processing relays, Razorpay orders, and business workflows.
  * URL pattern: https://<instance>.app.n8n.cloud/webhook/...
  */
@@ -95,7 +95,7 @@ function generateSimulatedAiResponse(message: string, context?: AiChatPayload['u
   }
 
   return {
-    reply: `Welcome to your safe sanctuary at Balance Studio. Whatever is present in your day right now—joy, tension, or quiet contemplation—let's honor it without judgment. How is your energy level feeling at this moment?`,
+    reply: `Welcome to your safe sanctuary at Balance Compass. Whatever is present in your day right now—joy, tension, or quiet contemplation—let's honor it without judgment. How is your energy level feeling at this moment?`,
     suggestedPill: 'Quick Mood Check-in',
     actionRecommendation: {
       type: 'moment',
@@ -168,7 +168,7 @@ export async function createRazorpayOrderViaN8n(orderData: {
         orderId: data.orderId || `order_${Date.now()}`,
         amount: data.amount || orderData.amount,
         currency: data.currency || orderData.currency || 'INR',
-        keyId: data.keyId || 'rzp_test_BalanceStudio2026',
+        keyId: data.keyId || 'rzp_test_BalanceCompass2026',
       };
     }
   } catch (err) {
@@ -181,7 +181,7 @@ export async function createRazorpayOrderViaN8n(orderData: {
     orderId: `order_sim_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
     amount: orderData.amount,
     currency: orderData.currency || 'INR',
-    keyId: 'rzp_test_BalanceStudio2026',
+    keyId: 'rzp_test_BalanceCompass2026',
   };
 }
 
@@ -214,10 +214,5 @@ export async function sendContactInquiryViaN8n(inquiryData: {
     console.warn('[n8n Contact Webhook] Relay logged locally:', err);
   }
 
-  return {
-    success: true,
-    message: inquiryData.isUrgentSupport
-      ? 'High priority alert received. If you are experiencing a crisis, please call emergency services or the 24/7 lifeline immediately.'
-      : 'Thank you for reaching out! A Balance Studio guide will reply within 24 hours.',
-  };
+  return { success: false, message: 'This contact form is not connected right now, so your message was not sent. Please try again later or use the official support link shown on the page.' };
 }
