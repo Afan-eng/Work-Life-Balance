@@ -11,6 +11,42 @@ export function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+export function getLocalDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function shiftDateKey(dateKey: string, days: number): string {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const date = new Date(year, month - 1, day, 12);
+  date.setDate(date.getDate() + days);
+  return getLocalDateKey(date);
+}
+
+export function calculateStreaks(matrix: Record<string, boolean>, todayKey = getLocalDateKey()) {
+  const completedDays = Object.keys(matrix).filter((date) => matrix[date] && date < todayKey).sort();
+  let bestStreak = 0;
+  let runningStreak = 0;
+  let previousDay = '';
+
+  for (const date of completedDays) {
+    runningStreak = previousDay && shiftDateKey(previousDay, 1) === date ? runningStreak + 1 : 1;
+    bestStreak = Math.max(bestStreak, runningStreak);
+    previousDay = date;
+  }
+
+  let currentStreak = 0;
+  let cursor = shiftDateKey(todayKey, -1);
+  while (matrix[cursor]) {
+    currentStreak += 1;
+    cursor = shiftDateKey(cursor, -1);
+  }
+
+  return { currentStreak, bestStreak };
+}
+
 export function getCurrentRhythmBadge(hour: number): { label: string; color: string; desc: string } {
   if (hour >= 5 && hour < 11) {
     return { label: 'Morning Focus', color: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800', desc: 'Prime cognitive bandwidth & intention setting' };

@@ -1,4 +1,4 @@
-# Balance Studio — Community Engagement & Life-in-Balance Platform
+# Balance Compass — Community Engagement & Life-in-Balance Platform
 
 A premium, modern, highly visual and fully interactive multi-page web application engineered around botanical calm and editorial wellness.
 
@@ -6,7 +6,7 @@ A premium, modern, highly visual and fully interactive multi-page web applicatio
 
 - **Frontend**: React (Vite) + TypeScript + Tailwind CSS + shadcn/ui tokens + Lucide React.
 - **Routing**: Clean client-side SPA routing (`react-router-dom`) with active route tracking and smooth view transitions.
-- **Backend & Automation**: [n8n Cloud](https://n8n.io). All backend logic, AI processing relays, scheduled jobs, and payment workflows run through webhook-based n8n workflows (`https://<your-n8n-instance>.app.n8n.cloud/webhook/...`).
+- **Backend & Auth**: [Supabase](https://supabase.com) provides PostgreSQL, account authentication, and server-side streak functions. n8n is optional and can be added for workflow automation.
 - **Database & Auth**: [Supabase](https://supabase.com) (PostgreSQL + Supabase Auth) with Row Level Security (RLS) on all user-scoped tables:
   - `user_streaks`
   - `user_habits`
@@ -16,8 +16,8 @@ A premium, modern, highly visual and fully interactive multi-page web applicatio
   - `chat_messages`
   - `payments`
 - **Media Storage**: [Cloudinary](https://cloudinary.com) for profile avatars and 21-day community challenge proof photos.
-- **AI Processing**: Empathetic wellness coaching ("Balance Guide") orchestrated via n8n webhook calling third-party LLMs.
-- **Payments**: Razorpay Checkout modal for subscriptions and masterclass workshop passes with n8n webhook signature verification.
+- **AI Processing**: The wellness coach has a local fallback; an external LLM workflow can be connected separately.
+- **Payments**: Razorpay Checkout can be connected to a trusted server-side order and signature-verification endpoint. n8n is one option, not a requirement.
 
 ---
 
@@ -28,12 +28,12 @@ A premium, modern, highly visual and fully interactive multi-page web applicatio
 npm install
 ```
 
-### 2. Configure Environment Variables (Optional)
+### 2. Configure Environment Variables
 Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-*(The application includes graceful simulation/fallback handling, so it runs completely out-of-the-box even before you set up live cloud credentials!)*
+The app can be previewed without cloud credentials; in that mode account credentials and personal data are stored in this browser only. This mode is for local previews and is not suitable for production accounts or sensitive wellness journals.
 
 ### 3. Run Development Server
 ```bash
@@ -51,17 +51,22 @@ npm run build
 ## 🗄️ Database Setup (Supabase)
 To initialize the database in your Supabase project:
 1. Open your Supabase Dashboard -> **SQL Editor**.
-2. Copy and execute the contents of `src/lib/supabase_schema.sql`.
-3. All tables, RLS policies, and indexes will be created automatically.
+2. For a new project, copy and execute `src/lib/supabase_schema.sql`. For an existing project, execute `src/lib/streak_migration.sql` to enable timezone-aware, clock-locked streaks without rerunning the full schema.
+3. A fresh install creates the app tables and policies; the streak migration updates an existing install's streak rules and policies.
+4. For an existing Supabase project, also run `src/lib/worker_law_submissions.sql` and `src/lib/productivity_migration.sql` to enable the laws form, private schedule sync, library completion markers and workshop/circle saves. These migrations grant users access only to their own records. For a new project, the current `supabase_schema.sql` includes these tables.
+
+Tracker contributions are recorded after completing a wellness tracker. Today's contribution stays pending until the account's local calendar reaches midnight; a missed local calendar day breaks the streak. Supabase uses a server-clock function for authenticated contribution writes, and the audience calendar hides daily counts below five members.
+
+For production, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to your real project values, configure the allowed site and redirect URLs in Supabase Auth, and enable the Google provider only if its OAuth credentials are configured. Never put a Supabase service-role key in a `VITE_` variable. The schema policies should be applied to a fresh project; when rerunning migrations on an existing project, manage policies as migrations to avoid duplicate-policy errors.
+
+The browser-only preview account store is not an authentication system: it does not validate passwords, and its data does not sync across browsers or devices. Use Supabase Auth and the RLS-protected database for real customer accounts.
+
+Schedule reminders are checked in the open app and can use browser notifications after the user opts in. Browsers may pause reminders while the device sleeps or the site is closed; reliable closed-site push delivery requires a push service and server-side sender that are not included here. Schedule reflections use local rules and are not generated by an external AI model.
 
 ---
 
-## ⚡ n8n Webhook Endpoints
-The frontend is configured to communicate with the following webhooks:
-- `POST /webhook/balance-ai-chat`: Relays user prompts and chat history to the LLM.
-- `POST /webhook/razorpay-order-create`: Generates authentic Razorpay Order IDs.
-- `POST /webhook/razorpay-verify`: Validates payment signatures and provisions Supabase membership passes.
-- `POST /webhook/contact-inquiry`: Relays crisis and support messages.
+## Optional integrations
+n8n is optional. Use it only if you want workflow automation or want to relay requests to external services. Supabase Edge Functions or another trusted backend can provide the same server-side integration points. Before enabling payments, configure server-side order creation and signature verification; never treat a client-side payment completion as proof of payment. Configure upload restrictions before accepting user files in production.
 
 ---
 

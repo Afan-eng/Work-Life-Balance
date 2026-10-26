@@ -14,7 +14,7 @@ export const About: React.FC = () => {
           Life works better in balance.
         </h1>
         <p className="text-sm text-ink-700/80 dark:text-linen-200/80 leading-relaxed">
-          Balance Studio was founded in response to the modern epidemic of digital overstimulation, chronic burnout, and fractured human connection.
+          Balance Compass was founded in response to the modern epidemic of digital overstimulation, chronic burnout, and fractured human connection.
         </p>
       </div>
 

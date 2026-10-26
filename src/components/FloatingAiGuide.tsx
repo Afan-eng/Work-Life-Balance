@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Sparkles, MessageSquare, X, Send, Bot, User, Trash2, Plus, 
+import {
+  Sparkles, MessageSquare, X, Send, Bot, User, Trash2, Plus,
   ChevronRight, Compass, Heart, Wind, Flame, Check
 } from 'lucide-react';
 import { sendAiChatMessage, type AiChatMessage } from '../lib/n8n';
@@ -25,17 +25,9 @@ export const FloatingAiGuide: React.FC = () => {
   const [showThreadSidebar, setShowThreadSidebar] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const [threads, setThreads] = useState<ChatThread[]>(() => {
-    const saved = localStorage.getItem('balance_ai_threads');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback
-      }
-    }
-    return [
+
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const makeWelcomeThread = (): ChatThread[] => [
       {
         id: 'thread_initial',
         title: 'Sanctuary Welcome & Grounding',
@@ -48,16 +40,63 @@ export const FloatingAiGuide: React.FC = () => {
         ],
       },
     ];
-  });
 
-  const [activeThreadId, setActiveThreadId] = useState<string>('thread_initial');
+  const [activeThreadId, setActiveThreadId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0];
 
+  // Fetch threads and messages from Supabase on mount
   useEffect(() => {
-    localStorage.setItem('balance_ai_threads', JSON.stringify(threads));
-  }, [threads]);
+    const fetchChatData = async () => {
+      if (isSupabaseConfigured && user) {
+        // 1. Fetch threads
+        const { data: threadData, error: threadError } = await supabase
+          .from('chat_threads')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false });
+
+        if (!threadError && threadData && threadData.length > 0) {
+          const loadedThreads: ChatThread[] = await Promise.all(
+            threadData.map(async (t) => {
+              const { data: msgData } = await supabase
+                .from('chat_messages')
+                .select('*')
+                .eq('thread_id', t.id)
+                .order('created_at', { ascending: true });
+
+              return {
+                id: t.id,
+                title: t.title,
+                createdAt: t.created_at,
+                messages: (msgData || []).map(m => ({
+                  role: m.role as 'user' | 'assistant' | 'system',
+                  content: m.content
+                }))
+              };
+            })
+          );
+          setThreads(loadedThreads);
+          setActiveThreadId(loadedThreads[0].id);
+        } else if (!threadError) { const welcome = makeWelcomeThread(); setThreads(welcome); setActiveThreadId(welcome[0].id); }
+      } else if (user) {
+        try {
+          const saved = JSON.parse(localStorage.getItem(`balance_ai_threads_${user.id}`) || 'null');
+          const restored = Array.isArray(saved) && saved.length ? saved : makeWelcomeThread();
+          setThreads(restored); setActiveThreadId(restored[0].id);
+        } catch { const welcome = makeWelcomeThread(); setThreads(welcome); setActiveThreadId(welcome[0].id); }
+      } else {
+        setThreads([]); setActiveThreadId('');
+      }
+    };
+
+    fetchChatData();
+  }, [user]);
+
+  useEffect(() => {
+    if (user) localStorage.setItem(`balance_ai_threads_${user.id}`, JSON.stringify(threads));
+  }, [threads, user]);
 
   useEffect(() => {
     if (isOpen) {
@@ -70,7 +109,7 @@ export const FloatingAiGuide: React.FC = () => {
     if (!msg || loading) return;
 
     const userMsg: AiChatMessage = { role: 'user', content: msg };
-    
+
     // Add user message to active thread
     setThreads((prev) =>
       prev.map((t) => {
@@ -133,8 +172,8 @@ export const FloatingAiGuide: React.FC = () => {
     }
   };
 
-  const handleCreateNewThread = () => {
-    const newId = `thread_${Date.now()}`;
+  const handleCreateNewThread = async () => {
+    const newId = crypto.randomUUID();
     const newThread: ChatThread = {
       id: newId,
       title: 'New Grounding Session',
@@ -146,14 +185,35 @@ export const FloatingAiGuide: React.FC = () => {
         },
       ],
     };
+
+    if (isSupabaseConfigured && user) {
+      await supabase.from('chat_threads').insert({
+        id: newId,
+        user_id: user.id,
+        title: newThread.title
+      });
+      // Also insert the initial assistant message
+      await supabase.from('chat_messages').insert({
+        thread_id: newId,
+        user_id: user.id,
+        role: 'assistant',
+        content: newThread.messages[0].content
+      });
+    }
+
     setThreads([newThread, ...threads]);
     setActiveThreadId(newId);
     setShowThreadSidebar(false);
   };
 
-  const handleDeleteThread = (id: string, e: React.MouseEvent) => {
+  const handleDeleteThread = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (threads.length <= 1) return;
+
+    if (isSupabaseConfigured && user) {
+      await supabase.from('chat_threads').delete().eq('id', id);
+    }
+
     const remaining = threads.filter((t) => t.id !== id);
     setThreads(remaining);
     if (activeThreadId === id) {

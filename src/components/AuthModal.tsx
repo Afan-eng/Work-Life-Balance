@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { X, Sparkles, Mail, Lock, User, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, closeAuthModal, authModalTab, openAuthModal, signInWithEmail, signUpWithEmail, signInWithGoogle, resetPassword } = useAuth();
@@ -29,7 +30,7 @@ export const AuthModal: React.FC = () => {
         if (res.error) {
           setErrorMsg(res.error);
         } else {
-          setSuccessNotice('Account created! Supabase session initialized.');
+          setSuccessNotice('Account created! Your personal dashboard is ready.');
         }
       } else if (authModalTab === 'forgot') {
         const res = await resetPassword(email);
@@ -82,7 +83,7 @@ export const AuthModal: React.FC = () => {
             </h2>
             <p className="text-sm text-ink-700/70 dark:text-linen-200/70 mt-1">
               {authModalTab === 'login' && 'Log in to sync your streaks, habits & AI coach sessions.'}
-              {authModalTab === 'signup' && 'Create your free account with Supabase Auth.'}
+              {authModalTab === 'signup' && (isSupabaseConfigured ? 'Create your free account with Supabase Auth.' : 'Create a browser-only preview profile for this demo.')}
               {authModalTab === 'forgot' && 'Enter your email to receive recovery instructions.'}
             </p>
           </div>
@@ -114,7 +115,7 @@ export const AuthModal: React.FC = () => {
                     d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16.5C3.7 20.2 7.5 23.5 12 23.5z"
                   />
                 </svg>
-                Continue with Google OAuth
+                {isSupabaseConfigured ? 'Continue with Google OAuth' : 'Continue with demo profile'}
               </button>
               <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
@@ -216,7 +217,7 @@ export const AuthModal: React.FC = () => {
               className="w-full py-3 px-4 bg-sage-500 hover:bg-sage-600 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-soft hover:shadow-lift transition disabled:opacity-50 mt-2"
             >
               {loading ? (
-                <span>Connecting to Supabase...</span>
+                <span>Working...</span>
               ) : (
                 <>
                   <span>
@@ -256,6 +257,8 @@ export const AuthModal: React.FC = () => {
               </p>
             )}
           </div>
+
+          {!isSupabaseConfigured && authModalTab !== 'forgot' && <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Preview mode: profiles and wellness data stay in this browser. Passwords are not verified and Google sign-in is simulated. Configure Supabase Auth before using real customer accounts.</p>}
 
           <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-ink-700/50 dark:text-linen-200/50">
             <ShieldCheck className="w-3.5 h-3.5 text-sage-500" />

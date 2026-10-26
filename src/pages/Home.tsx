@@ -12,7 +12,7 @@ import { openRazorpayCheckout } from '../lib/razorpay';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Home: React.FC = () => {
-  const { profile, openAuthModal } = useAuth();
+  const { user, profile, openAuthModal } = useAuth();
   const [isBreathModalOpen, setIsBreathModalOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<number | null>(0);
 
@@ -93,7 +93,7 @@ export const Home: React.FC = () => {
       name: 'Dr. Aris Thorne',
       role: 'Emergency Physician',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-      quote: 'Balance Studio transformed how I transition out of intense 12-hour hospital shifts. The Box Breathing and Feeling Picker are now non-negotiable anchors in my day.',
+      quote: 'Balance Compass transformed how I transition out of intense 12-hour hospital shifts. The Box Breathing and Feeling Picker are now non-negotiable anchors in my day.',
     },
     {
       name: 'Maya Lin',
@@ -112,24 +112,24 @@ export const Home: React.FC = () => {
   // FAQ Items
   const faqs = [
     {
-      q: 'How does Balance Studio differ from standard productivity tools?',
-      a: 'Most productivity apps focus on cramming more tasks into less time. Balance Studio is engineered around somatic calibration, nervous system regulation, and sustainable human rhythms. We measure energy and restorative recovery alongside habit completion.',
+      q: 'How does Balance Compass differ from standard productivity tools?',
+      a: 'Most productivity apps focus on cramming more tasks into less time. Balance Compass is engineered around somatic calibration, nervous system regulation, and sustainable human rhythms. We measure energy and restorative recovery alongside habit completion.',
     },
     {
-      q: 'How does the n8n backend workflow architecture work?',
-      a: 'All backend logic, AI processing relays, scheduled jobs, and Razorpay payment signature validations run serverlessly via n8n webhook workflows. This ensures high availability, zero custom server bloat, and seamless modularity.',
+      q: 'Is n8n required to use Balance Compass?',
+      a: 'No. Supabase handles accounts, private tracker data, and streak verification. n8n is an optional tool for connecting additional automations or external services.',
     },
     {
       q: 'Are my reflections and mood logs private?',
       a: 'Yes. All data stored in Supabase is strictly protected by PostgreSQL Row Level Security (RLS) policies tied to your cryptographic user UUID. Nobody else in the studio can access your private journals.',
     },
     {
-      q: 'Can I use Balance Studio as a guest without signing up?',
-      a: 'Absolutely! You can log habits, run the Box Breathing coach, test the Pomodoro timer, and explore all wellness pillars offline. Your streak is preserved in local storage and will automatically sync once you sign in.',
+      q: 'Can I use the trackers without an account?',
+      a: 'Public articles and media are open to explore. Sign in before using personal trackers so your entries and streak history are attached to your account.',
     },
     {
       q: 'How does the Razorpay checkout integration operate?',
-      a: 'When you purchase a workshop pass or upgrade to the Annual Balance Sanctuary, our n8n webhook securely generates an authentic Razorpay Order ID. You complete checkout via the official Razorpay modal with UPI, cards, or net banking, and your account unlocks instantly.',
+      a: 'Payments require a trusted server-side order and signature-verification endpoint. That backend can use a Supabase Edge Function, your own server, or an optional n8n workflow; a browser message alone never confirms payment.',
     },
   ];
 
@@ -188,7 +188,7 @@ export const Home: React.FC = () => {
           {/* Dual CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-3">
             <button
-              onClick={() => setIsBreathModalOpen(true)}
+              onClick={() => user ? setIsBreathModalOpen(true) : openAuthModal('login')}
               className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-sage-500 to-sage-600 hover:from-sage-600 hover:to-sage-700 text-white font-heading font-bold text-sm tracking-wide shadow-lift hover:scale-105 transition flex items-center justify-center gap-2.5 group"
             >
               <Sparkles className="w-4 h-4 text-warmAmber-300 group-hover:rotate-12 transition-transform" />
@@ -209,27 +209,25 @@ export const Home: React.FC = () => {
           <div className="pt-8 flex flex-wrap items-center justify-center gap-6 sm:gap-12 text-xs text-linen-300/80 border-t border-white/10 max-w-2xl mx-auto">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Postgres RLS Database</span>
+              <span>Account-based tracker privacy</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>n8n Cloud Automation</span>
+              <span>Streaks lock at local midnight</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Razorpay Verified</span>
+              <span>Curated wellness library</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 2. LIVE STREAK CARD HIGHLIGHT */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 sm:-mt-14 relative z-20">
-        <StreakCard />
-      </section>
-
-      {/* 3. INTERACTIVE PERSONAL BALANCE HUB */}
-      <PersonalBalanceHub />
+      {/* Personal tracker activity is private to signed-in accounts. */}
+      {user ? <>
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 sm:-mt-14 relative z-20"><StreakCard /></section>
+        <PersonalBalanceHub />
+      </> : <section className="mx-auto -mt-10 w-[calc(100%-2rem)] max-w-5xl rounded-3xl border border-white/30 bg-white/95 p-6 text-center shadow-lift backdrop-blur-xl dark:border-ink-700 dark:bg-ink-900 sm:p-8"><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"><Flame className="h-6 w-6"/></div><h2 className="mt-4 font-heading text-xl font-extrabold text-ink-900 dark:text-linen-100">Build a streak that’s yours.</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-ink-700/70 dark:text-linen-200/70">Sign in to use your private wellness trackers and earn contribution days. Your day is verified when your local calendar reaches midnight.</p><button onClick={() => openAuthModal('login')} className="mt-5 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-800">Sign in or create account</button></section>}
 
       {/* 4. FEATURED WELLNESS PILLARS TEASER */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -413,7 +411,7 @@ export const Home: React.FC = () => {
                 </span>
               </div>
               <h3 className="font-heading font-extrabold text-2xl text-ink-900 dark:text-linen-100 group-hover:text-sage-600 transition">
-                Balance Studio Podcasts
+                Balance Compass Podcasts
               </h3>
               <p className="text-xs sm:text-sm text-ink-700/70 dark:text-linen-200/70 leading-relaxed">
                 Functional HTML5 audio player with scrubbers and volume controls. Tune in to conversations with integrative neuroscientists on somatic anchors, digital minimalism, and restorative sleep.
@@ -628,7 +626,7 @@ export const Home: React.FC = () => {
       </section>
 
       {/* Quick Box Breathing Modal */}
-      <QuickBreathModal isOpen={isBreathModalOpen} onClose={() => setIsBreathModalOpen(false)} />
+      {user && <QuickBreathModal isOpen={isBreathModalOpen} onClose={() => setIsBreathModalOpen(false)} />}
     </div>
   );
 };

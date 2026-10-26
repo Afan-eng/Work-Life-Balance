@@ -1,64 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Target, Award, Calendar, Plus, CheckCircle2, Circle, X, Sparkles, Trophy } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, isSupabaseConfigured, type UserGoalRecord } from '../lib/supabase';
 
-const INITIAL_GOALS: UserGoalRecord[] = [
-  {
-    id: 'g_1',
-    user_id: 'usr_demo',
-    title: 'Achieve Sustainable 35-Hour Focused Workweek',
-    category: 'Career',
-    target_date: '2026-12-15',
-    progress: 75,
-    milestones: [
-      { id: 'm1', title: 'Audit weekly calendar & remove 4 unnecessary meetings', completed: true },
-      { id: 'm2', title: 'Institute non-negotiable 90m deep work sprint daily', completed: true },
-      { id: 'm3', title: 'Decline all afternoon notifications', completed: true },
-      { id: 'm4', title: 'Leave office by 5:30 PM for 5 consecutive workdays', completed: false },
-    ],
-    status: 'active',
-  },
-  {
-    id: 'g_2',
-    user_id: 'usr_demo',
-    title: 'Complete 21-Day Nervous System Reset',
-    category: 'Mental',
-    target_date: '2026-11-20',
-    progress: 60,
-    milestones: [
-      { id: 'm5', title: 'Complete 7 days of Box Breathing', completed: true },
-      { id: 'm6', title: 'Take 3 nature grounding walks without earphones', completed: true },
-      { id: 'm7', title: 'Log evening mood journal 14 consecutive nights', completed: false },
-    ],
-    status: 'active',
-  },
-  {
-    id: 'g_3',
-    user_id: 'usr_demo',
-    title: 'Consistent 7.5+ Hours Circadian Sleep',
-    category: 'Physical',
-    target_date: '2026-11-30',
-    progress: 40,
-    milestones: [
-      { id: 'm8', title: 'Screen off at 9:30 PM for 10 days', completed: true },
-      { id: 'm9', title: 'Morning sunlight exposure within 30 mins of waking', completed: true },
-      { id: 'm10', title: 'Zero caffeine after 1:00 PM', completed: false },
-    ],
-    status: 'active',
-  },
-];
-
 const BADGES = [
-  { title: 'Somatic Pioneer', desc: 'Completed first 7-day grounding milestone', icon: '🌿', unlocked: true },
-  { title: 'Focus Sprint Master', desc: 'Over 10 successful Pomodoro cycles', icon: '⏱️', unlocked: true },
-  { title: 'Circadian Alchemist', desc: 'Consistent sleep hygiene streak', icon: '🌙', unlocked: true },
+  { title: 'Somatic Pioneer', desc: 'Completed first 7-day grounding milestone', icon: '🌿', unlocked: false },
+  { title: 'Focus Sprint Master', desc: 'Over 10 successful Pomodoro cycles', icon: '⏱️', unlocked: false },
+  { title: 'Circadian Alchemist', desc: 'Consistent sleep hygiene streak', icon: '🌙', unlocked: false },
   { title: 'Zen Equilibrium', desc: 'Achieved 95%+ Balance Score', icon: '💎', unlocked: false },
 ];
 
 export const GoalTracker: React.FC = () => {
   const { user } = useAuth();
-  const [goals, setGoals] = useState<UserGoalRecord[]>(INITIAL_GOALS);
+  const [goals, setGoals] = useState<UserGoalRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -66,34 +21,63 @@ export const GoalTracker: React.FC = () => {
   const [newCategory, setNewCategory] = useState<'Career' | 'Physical' | 'Mental' | 'Relationships'>('Mental');
   const [newDate, setNewDate] = useState('2026-12-31');
 
-  const handleToggleMilestone = (goalId: string, milestoneId: string) => {
-    setGoals((prev) =>
-      prev.map((g) => {
-        if (g.id === goalId) {
-          const updatedMilestones = g.milestones.map((m) =>
-            m.id === milestoneId ? { ...m, completed: !m.completed } : m
-          );
-          const completedCount = updatedMilestones.filter((m) => m.completed).length;
-          const nextProgress = Math.round((completedCount / updatedMilestones.length) * 100);
-          return {
-            ...g,
-            milestones: updatedMilestones,
-            progress: nextProgress,
-            status: nextProgress === 100 ? 'completed' : 'active',
-          };
+  // Fetch goals on mount
+  useEffect(() => {
+    const fetchGoals = async () => {
+      if (isSupabaseConfigured && user) {
+        const { data, error } = await supabase
+          .from('user_goals')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          setGoals(data as UserGoalRecord[]);
         }
-        return g;
-      })
+      } else {
+        try { setGoals(user ? JSON.parse(localStorage.getItem(`balance_user_goals_${user.id}`) || '[]') : []); }
+        catch { setGoals([]); }
+      }
+      setLoading(false);
+    };
+
+    fetchGoals();
+  }, [user]);
+
+  const handleToggleMilestone = async (goalId: string, milestoneId: string) => {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+
+    const updatedMilestones = goal.milestones.map((m) =>
+      m.id === milestoneId ? { ...m, completed: !m.completed } : m
     );
+    const completedCount = updatedMilestones.filter((m) => m.completed).length;
+    const nextProgress = Math.round((completedCount / updatedMilestones.length) * 100);
+
+    const updatedGoal = {
+      ...goal,
+      milestones: updatedMilestones,
+      progress: nextProgress,
+      status: (nextProgress === 100 ? 'completed' : 'active') as 'active' | 'completed' | 'paused',
+    };
+
+    setGoals((prev) => prev.map((g) => (g.id === goalId ? updatedGoal : g)));
+    if (!isSupabaseConfigured && user) {
+      const next = goals.map(g => g.id === goalId ? updatedGoal : g);
+      localStorage.setItem(`balance_user_goals_${user.id}`, JSON.stringify(next));
+    }
+
+    if (isSupabaseConfigured && user) {
+      await supabase.from('user_goals').upsert(updatedGoal);
+    }
   };
 
-  const handleCreateGoal = (e: React.FormEvent) => {
+  const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const newGoal: UserGoalRecord = {
-      id: `g_${Date.now()}`,
-      user_id: user?.id || 'usr_demo',
+    const newGoal: Partial<UserGoalRecord> = {
+      user_id: user?.id || '',
       title: newTitle.trim(),
       category: newCategory,
       target_date: newDate,
@@ -105,7 +89,23 @@ export const GoalTracker: React.FC = () => {
       status: 'active',
     };
 
-    setGoals([newGoal, ...goals]);
+    if (isSupabaseConfigured && user) {
+      const { data, error } = await supabase
+        .from('user_goals')
+        .insert(newGoal)
+        .select()
+        .single();
+
+      if (!error && data) {
+        setGoals([data as UserGoalRecord, ...goals]);
+      }
+    } else if (user) {
+      const demoGoal = { ...newGoal, id: `g_${Date.now()}` } as UserGoalRecord;
+      const next = [demoGoal, ...goals];
+      setGoals(next);
+      localStorage.setItem(`balance_user_goals_${user.id}`, JSON.stringify(next));
+    }
+
     setNewTitle('');
     setIsAddModalOpen(false);
   };
@@ -183,7 +183,23 @@ export const GoalTracker: React.FC = () => {
 
       {/* Goals Progression Cards */}
       <div className="space-y-6">
-        {filteredGoals.map((goal) => (
+        {loading ? (
+          <div className="text-center py-20 animate-pulse">
+            <Target className="w-10 h-10 text-sage-300 mx-auto mb-4" />
+            <p className="text-sm text-ink-700/60 dark:text-linen-200/60">Aligning your life trajectories...</p>
+          </div>
+        ) : filteredGoals.length === 0 ? (
+          <div className="text-center py-20 glass-card rounded-3xl border border-sage-200/60">
+            <Trophy className="w-10 h-10 text-sage-200 mx-auto mb-4" />
+            <p className="text-sm text-ink-900 dark:text-linen-100 font-bold">No goals in this category yet.</p>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="text-xs text-sage-600 font-bold mt-2 hover:underline"
+            >
+              + Map out a new holistic goal
+            </button>
+          </div>
+        ) : filteredGoals.map((goal) => (
           <div
             key={goal.id}
             className="glass-card rounded-3xl p-6 sm:p-7 shadow-soft border border-sage-200/80 dark:border-ink-700 space-y-5"
@@ -198,8 +214,9 @@ export const GoalTracker: React.FC = () => {
                     <Calendar className="w-3 h-3" /> Target: {goal.target_date}
                   </span>
                 </div>
-                <h3 className="font-heading font-bold text-lg text-ink-900 dark:text-linen-100">
+                <h3 className="font-heading font-bold text-lg text-ink-900 dark:text-linen-100 flex items-center gap-2">
                   {goal.title}
+                  {goal.progress === 100 && <Sparkles className="w-4 h-4 text-warmAmber-500" />}
                 </h3>
               </div>
               <div className="text-right">

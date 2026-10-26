@@ -1,39 +1,13 @@
 import React from 'react';
-import { CreditCard, FileText, CheckCircle2 } from 'lucide-react';
+import { FileText, HeartHandshake } from 'lucide-react';
 
-export const Terms: React.FC = () => {
-  return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
-      <div>
-        <h1 className="text-3xl font-extrabold font-heading text-ink-900 dark:text-linen-100">
-          Terms of Service & Sanctuary Agreement
-        </h1>
-        <p className="text-xs text-ink-700/60 dark:text-linen-200/60 mt-1">
-          Effective October 2026 • Governing member participation, subscriptions, and Razorpay passes
-        </p>
-      </div>
-
-      <div className="glass-card rounded-3xl p-8 shadow-soft border border-sage-200/80 dark:border-ink-700 space-y-6 text-xs sm:text-sm text-ink-800/80 dark:text-linen-200/80 leading-relaxed">
-        <section className="space-y-2">
-          <h2 className="font-heading font-bold text-base text-ink-900 dark:text-linen-100 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-sage-600" />
-            1. Informational & Educational Nature
-          </h2>
-          <p>
-            The somatic protocols, Box Breathing guides, and AI coaching dialogues provided by Balance Studio are intended strictly for educational, mindful wellness, and habit self-regulation purposes. They do not constitute licensed medical diagnosis, clinical psychiatric therapy, or emergency psychiatric intervention.
-          </p>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="font-heading font-bold text-base text-ink-900 dark:text-linen-100 flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-emerald-600" />
-            2. Razorpay Billing & Workshop Passes
-          </h2>
-          <p>
-            All paid passes and annual memberships are authorized through Razorpay Checkout. Webhook signatures generated upon successful transactions immediately provision user entitlements in our Supabase records. If you are unsatisfied with a live masterclass pass, refund requests submitted within 48 hours of purchase will be processed promptly.
-          </p>
-        </section>
-      </div>
-    </div>
-  );
-};
+export const Terms: React.FC = () => <div className="mx-auto max-w-4xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
+  <header><div className="inline-flex items-center gap-2 rounded-full bg-sage-100 px-3 py-1.5 text-xs font-bold text-sage-800 dark:bg-sage-950 dark:text-sage-200"><FileText className="h-4 w-4"/> Using Balance Compass</div><h1 className="mt-4 font-heading text-3xl font-extrabold text-ink-900 dark:text-linen-100">Terms & important information</h1><p className="mt-2 text-xs text-ink-700/60 dark:text-linen-200/60">Updated October 2026</p></header>
+  <div className="space-y-6 rounded-3xl border border-sage-200 bg-white p-6 text-sm leading-7 text-ink-700 shadow-sm dark:border-ink-700 dark:bg-ink-900 dark:text-linen-200 sm:p-8">
+    <section><h2 className="font-heading text-lg font-bold text-ink-900 dark:text-linen-100">Wellness and legal information</h2><p className="mt-2">Tracker, media, workshop and workplace-rights content is general education and self-reflection. It is not medical, mental-health, legal, employment, or emergency advice. Seek qualified professional or official support for decisions about your circumstances.</p></section>
+    <section><h2 className="font-heading text-lg font-bold text-ink-900 dark:text-linen-100">Schedules and reminders</h2><p className="mt-2">You are responsible for checking schedule blocks against your local time and changing them when your plans change. Browser reminders depend on device, browser, permissions, connectivity and the site being available; do not rely on them for safety-critical, medical or employment deadlines.</p></section>
+    <section><h2 className="font-heading text-lg font-bold text-ink-900 dark:text-linen-100">Workshops and circles</h2><p className="mt-2">The current workshops are self-guided materials. Circle prompts are intended for groups arranged by participants. Saving interest records interest only; it is not a confirmed live-event booking or a promise that a session is scheduled.</p></section>
+    <section><h2 className="font-heading text-lg font-bold text-ink-900 dark:text-linen-100">Payments and availability</h2><p className="mt-2">A payment is offered only when checkout is configured for the deployment. Never rely on an on-screen demo or client-side message as proof of payment, entitlement, refund or booking. Confirm any transaction through the configured payment provider and official receipt.</p></section>
+    <section className="flex gap-3 rounded-2xl bg-linen-100 p-4 text-xs leading-5 dark:bg-ink-950"><HeartHandshake className="h-5 w-5 shrink-0 text-sage-700 dark:text-sage-300"/><p>By using the service, you agree to use community spaces respectfully, avoid sharing other people’s personal information, and contact appropriate official services for urgent or formal complaints.</p></section>
+  </div>
+</div>;

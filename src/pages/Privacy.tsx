@@ -1,49 +1,13 @@
 import React from 'react';
-import { ShieldCheck, Lock, Database, EyeOff } from 'lucide-react';
+import { Database, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 
-export const Privacy: React.FC = () => {
-  return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
-      <div>
-        <h1 className="text-3xl font-extrabold font-heading text-ink-900 dark:text-linen-100">
-          Privacy Policy & Data Sanctuary
-        </h1>
-        <p className="text-xs text-ink-700/60 dark:text-linen-200/60 mt-1">
-          Last revised: October 2026 • Strict compliance with Supabase PostgreSQL Row Level Security (RLS)
-        </p>
-      </div>
-
-      <div className="glass-card rounded-3xl p-8 shadow-soft border border-sage-200/80 dark:border-ink-700 space-y-6 text-xs sm:text-sm text-ink-800/80 dark:text-linen-200/80 leading-relaxed">
-        <section className="space-y-2">
-          <h2 className="font-heading font-bold text-base text-ink-900 dark:text-linen-100 flex items-center gap-2">
-            <Lock className="w-4 h-4 text-sage-600" />
-            1. Cryptographic User Isolation via Row Level Security (RLS)
-          </h2>
-          <p>
-            Every mood journal entry, private reflection, habit record, and chat transcript in Balance Studio is anchored to your cryptographic Supabase Auth user UUID. All tables (`chat_threads`, `chat_messages`, `user_streaks`, `user_habits`, `user_goals`, `user_mood_logs`, `payments`) enforce PostgreSQL RLS policies ensuring that neither other members nor unauthorized clients can access your private records.
-          </p>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="font-heading font-bold text-base text-ink-900 dark:text-linen-100 flex items-center gap-2">
-            <Database className="w-4 h-4 text-teal-600" />
-            2. n8n Cloud Automation & AI Processing Relays
-          </h2>
-          <p>
-            When interacting with the Balance Guide AI or requesting automated streak synchronization, data is routed via TLS 1.3 encrypted webhooks directly to our isolated n8n Cloud instance. Third-party LLM queries do not store or use your personal identity for foundational training.
-          </p>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="font-heading font-bold text-base text-ink-900 dark:text-linen-100 flex items-center gap-2">
-            <EyeOff className="w-4 h-4 text-emerald-600" />
-            3. Zero Advertising or Data Brokering
-          </h2>
-          <p>
-            Balance Studio never sells, rents, monetizes, or shares member data with third-party advertising exchanges. Our revenue model is entirely supported by transparent community memberships and masterclass passes processed via Razorpay.
-          </p>
-        </section>
-      </div>
-    </div>
-  );
-};
+export const Privacy: React.FC = () => <div className="mx-auto max-w-4xl space-y-8 px-4 py-12 sm:px-6 lg:px-8">
+  <header><div className="inline-flex items-center gap-2 rounded-full bg-sage-100 px-3 py-1.5 text-xs font-bold text-sage-800 dark:bg-sage-950 dark:text-sage-200"><ShieldCheck className="h-4 w-4"/> Privacy & your data</div><h1 className="mt-4 font-heading text-3xl font-extrabold text-ink-900 dark:text-linen-100">Privacy Policy</h1><p className="mt-2 text-xs text-ink-700/60 dark:text-linen-200/60">Last revised: October 2026</p></header>
+  <div className="space-y-6 rounded-3xl border border-sage-200 bg-white p-6 text-sm leading-7 text-ink-700 shadow-sm dark:border-ink-700 dark:bg-ink-900 dark:text-linen-200 sm:p-8">
+    <section><h2 className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900 dark:text-linen-100"><Lock className="h-5 w-5 text-sage-600"/>Information you choose to save</h2><p className="mt-2">When you use an account, the app may store your profile, tracker entries, streak activity, content completion, recurring schedule blocks, workshop completion and circle-interest selections. If you submit a workplace-law question or report, the form stores the contact details and message you provide. Please do not submit sensitive incident, medical or confidential workplace details through that form.</p></section>
+    <section><h2 className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900 dark:text-linen-100"><Database className="h-5 w-5 text-sage-600"/>Where it is stored</h2><p className="mt-2">With real Supabase configuration and the required database migrations applied, account records are stored in the connected Supabase project and protected by its authentication and row-level security policies. Local preview mode stores demo information in this browser only; it is not secure account authentication and does not sync between devices. Some interface preferences and a local cache of your schedule or completed library items can also be kept in browser storage.</p></section>
+    <section><h2 className="font-heading text-lg font-bold text-ink-900 dark:text-linen-100">Reminders and external services</h2><p className="mt-2">Schedule reminders are evaluated on your device while the site is open. Browser notifications are optional and require your permission. The site does not currently provide server-sent push reminders when the browser is closed. Video, audio and official-source links may open third-party websites that have their own privacy practices. The app can use Supabase for accounts and data, and Razorpay only when checkout is configured. n8n is optional and is not required for schedule reminders or saved content.</p></section>
+    <section><h2 className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900 dark:text-linen-100"><EyeOff className="h-5 w-5 text-sage-600"/>Your choices</h2><p className="mt-2">You can choose what to enter, disable notifications in browser settings and avoid optional features. The current app has no self-service account or data deletion control. A deployment owner must provide a verified way to handle data-access and deletion requests before opening registration broadly. Do not send passwords or payment credentials in a support request.</p></section>
+    <section><p className="text-xs text-ink-700/60 dark:text-linen-200/60">This notice describes the application’s current behavior and is not a statement of legal compliance or a substitute for an organization-specific privacy review. The current app has no self-service account deletion control; deployment owners should provide a clear account and data deletion process before opening registration broadly.</p></section>
+  </div>
+</div>;

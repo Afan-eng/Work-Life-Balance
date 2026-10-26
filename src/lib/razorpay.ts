@@ -40,7 +40,7 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions): Pr
         key: keyId,
         amount: amount * 100, // Razorpay takes paise
         currency: currency,
-        name: 'Balance Studio',
+        name: 'Balance Compass',
         description: itemName,
         image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=128&q=80',
         order_id: orderId.startsWith('order_sim_') ? undefined : orderId,
