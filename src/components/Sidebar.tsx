@@ -4,7 +4,7 @@ import {
   Home, Activity, Smile, Target, Clock, Brain, Zap, 
   Heart, Smartphone, BookOpen, Headphones, Video, Calendar, 
   Users, Trophy, Network, User, Mail, Award, Flame, X, 
-  ChevronRight, Sparkles, Building, ChevronLeft, BarChart3, FileCheck, PanelLeftClose, Globe 
+  ChevronRight, Sparkles, Building, ChevronLeft, BarChart3, FileCheck, PanelLeftClose, Globe, Scale, CalendarClock
 } from 'lucide-react';
 import { useStreak } from '../contexts/StreakContext';
 
@@ -28,7 +28,7 @@ interface NavSection {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
-  const { currentStreak, freezeTokens } = useStreak();
+  const { currentStreak, projectedStreak, todayCompleted } = useStreak();
 
   const navSections: NavSection[] = [
     {
@@ -46,6 +46,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       items: [
         { name: 'Home Sanctuary', path: '/', icon: Home },
         { name: 'My Dashboard', path: '/dashboard', icon: Activity },
+        { name: 'Streak Calendar', path: '/streaks', icon: Flame },
+        { name: 'Personal Schedule', path: '/schedule', icon: CalendarClock },
       ],
     },
     {
@@ -70,6 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       title: 'Media & Knowledge Lounge',
       items: [
         { name: 'Articles & Essays', path: '/articles', icon: BookOpen },
+        { name: 'Workplace Rights & Laws', path: '/worker-rights', icon: Scale },
         { name: 'Podcasts Lounge', path: '/podcasts', icon: Headphones },
         { name: 'Video Masterclasses', path: '/videos', icon: Video },
       ],
@@ -120,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             </div>
             <div className="truncate">
               <span className="font-heading font-extrabold text-sm tracking-tight text-ink-900 dark:text-linen-100 block leading-tight">
-                Balance Studio
+                Balance Compass
               </span>
               <span className="text-[9px] text-amber-700 dark:text-amber-400 font-bold tracking-wider uppercase block">
                 Your Daily Wellness Hub
@@ -198,10 +201,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </div>
               <div>
                 <span className="text-xs font-bold text-ink-900 dark:text-linen-100 block leading-tight">
-                  {currentStreak}d Streak
+                  {todayCompleted ? projectedStreak : currentStreak}d Streak
                 </span>
                 <span className="text-[9px] text-teal-600 dark:text-teal-400 font-medium">
-                  {freezeTokens} Freezes Protected
+                  {todayCompleted ? 'Today recorded' : 'Tracker streak'}
                 </span>
               </div>
             </div>

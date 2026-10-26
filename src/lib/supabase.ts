@@ -22,9 +22,9 @@ export interface UserStreakRecord {
   user_id: string;
   current_streak: number;
   best_streak: number;
-  freeze_tokens: number;
-  last_activity_date: string;
+  last_activity_date: string | null;
   completion_matrix: Record<string, boolean>; // e.g. { '2026-10-25': true }
+  time_zone: string;
   created_at?: string;
   updated_at?: string;
 }

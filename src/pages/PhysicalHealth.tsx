@@ -6,11 +6,11 @@ export const PhysicalHealth: React.FC = () => {
   const { recordActivity } = useStreak();
 
   const [checklist, setChecklist] = useState([
-    { id: 'p1', title: 'Morning hydration: 500ml water with pinch of sea salt', completed: true },
-    { id: 'p2', title: '10-minute natural sunlight walk before 9:00 AM', completed: true },
+    { id: 'p1', title: 'Morning hydration: 500ml water with pinch of sea salt', completed: false },
+    { id: 'p2', title: '10-minute natural sunlight walk before 9:00 AM', completed: false },
     { id: 'p3', title: 'Every 50m desk pause: Stand, stretch hip flexors & gaze at distance', completed: false },
     { id: 'p4', title: '7,500 daily baseline movement steps logged', completed: false },
-    { id: 'p5', title: 'Chew meals slowly without looking at phones or laptops', completed: true },
+    { id: 'p5', title: 'Chew meals slowly without looking at phones or laptops', completed: false },
   ]);
 
   const toggleItem = (id: string) => {

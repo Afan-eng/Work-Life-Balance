@@ -17,7 +17,7 @@ export const HealthTracker: React.FC = () => {
   const [pomoSecondsLeft, setPomoSecondsLeft] = useState(FOCUS_SECONDS);
   const [isPomoRunning, setIsPomoRunning] = useState(false);
   const [pomoSoundEnabled, setPomoSoundEnabled] = useState(true);
-  const [completedSprints, setCompletedSprints] = useState(2);
+  const [completedSprints, setCompletedSprints] = useState(0);
 
   // 2. BreathBox Guided Coach State
   const [breathPhase, setBreathPhase] = useState<'Inhale' | 'Hold (Full)' | 'Exhale' | 'Hold (Empty)'>('Inhale');

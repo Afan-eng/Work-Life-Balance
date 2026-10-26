@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { Smartphone, ShieldCheck, BellOff, Moon, Eye, Sparkles, CheckCircle2 } from 'lucide-react';
-import { useStreak } from '../contexts/StreakContext';
 
 export const DigitalWellbeing: React.FC = () => {
-  const { recordActivity } = useStreak();
   const [dailyHours, setDailyHours] = useState(4.5);
   const [curfewAgreed, setCurfewAgreed] = useState(false);
 
@@ -12,7 +10,6 @@ export const DigitalWellbeing: React.FC = () => {
 
   const handleAgreeCurfew = () => {
     setCurfewAgreed(true);
-    recordActivity('habit', 'Signed Digital Evening Curfew Agreement');
   };
 
   return (

@@ -6,34 +6,36 @@ import { sendContactInquiryViaN8n } from '../lib/n8n';
 export const Footer: React.FC = () => {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [newsletterError, setNewsletterError] = useState('');
 
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newsletterEmail) return;
-    await sendContactInquiryViaN8n({
+    setNewsletterError('');
+    const result = await sendContactInquiryViaN8n({
       name: 'Newsletter Subscriber',
       email: newsletterEmail,
       category: 'Newsletter Subscription',
       message: 'Subscribed to weekly mindful dispatch.',
     });
-    setSubscribed(true);
-    setNewsletterEmail('');
+    if (result.success) { setSubscribed(true); setNewsletterEmail(''); }
+    else setNewsletterError(result.message);
   };
 
   return (
     <footer className="bg-linen-200/60 dark:bg-ink-950 border-t border-sage-200/70 dark:border-ink-800 text-ink-800 dark:text-linen-200 transition-colors">
-      {/* 24/7 Crisis Support Bar */}
+      {/* India support information */}
       <div className="bg-sage-600 text-white px-4 py-2.5">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
             <PhoneCall className="w-4 h-4 shrink-0 text-warmAmber-300" />
             <span className="font-semibold">Need urgent emotional support?</span>
-            <span className="hidden md:inline text-white/80">You are never alone. Confidential crisis resources are available 24/7.</span>
+            <span className="hidden md:inline text-white/80">India: Tele-MANAS offers mental health support.</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="font-mono bg-white/20 px-2 py-0.5 rounded font-bold">Call / Text 988 (Lifeline)</span>
+            <a href="tel:14416" className="font-mono bg-white/20 px-2 py-0.5 rounded font-bold">Tele-MANAS 14416</a><a href="tel:112" className="font-mono bg-white/20 px-2 py-0.5 rounded font-bold">Emergency 112</a>
             <Link to="/contact" className="underline hover:text-warmAmber-200 flex items-center gap-0.5 font-medium">
-              View International Lines <ArrowUpRight className="w-3 h-3" />
+              Support & resources <ArrowUpRight className="w-3 h-3" />
             </Link>
           </div>
         </div>
@@ -48,7 +50,7 @@ export const Footer: React.FC = () => {
                 <Sparkles className="w-5 h-5" />
               </div>
               <span className="font-heading font-extrabold text-2xl tracking-tight text-ink-900 dark:text-linen-100">
-                Balance <span className="font-light text-sage-600 dark:text-sage-400">Studio</span>
+                Balance <span className="font-light text-sage-600 dark:text-sage-400">Compass</span>
               </span>
             </Link>
             <p className="text-sm text-ink-700/80 dark:text-linen-200/70 leading-relaxed max-w-sm">
@@ -148,6 +150,7 @@ export const Footer: React.FC = () => {
               </div>
             ) : (
               <form onSubmit={handleNewsletterSubmit} className="space-y-2">
+                {newsletterError && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300">{newsletterError}</p>}
                 <div className="relative">
                   <input
                     type="email"
@@ -171,13 +174,14 @@ export const Footer: React.FC = () => {
 
         {/* Bottom Legal & Copyright */}
         <div className="mt-12 pt-6 border-t border-sage-200/60 dark:border-ink-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-700/60 dark:text-linen-200/60">
-          <p>© {new Date().getFullYear()} Balance Studio Inc. Life works better in balance.</p>
+          <p>© {new Date().getFullYear()} Balance Compass · Life works better in balance.</p>
           <div className="flex items-center gap-4">
             <Link to="/about" className="hover:underline">About</Link>
             <Link to="/privacy" className="hover:underline">Privacy Policy</Link>
             <Link to="/terms" className="hover:underline">Terms of Service</Link>
             <Link to="/accessibility" className="hover:underline">Accessibility</Link>
             <Link to="/contact" className="hover:underline">Help & FAQ</Link>
+            <Link to="/community" className="hover:underline">Join the community</Link>
           </div>
         </div>
       </div>

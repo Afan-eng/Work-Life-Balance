@@ -23,8 +23,8 @@ export const Challenges: React.FC = () => {
           dayNum <= 7 ? 'Somatic Breath & Hydration' :
           dayNum <= 14 ? 'Digital Sunset & Screen Curfew' : 'Deep Ultradian Monotasking'
         }`,
-        completed: dayNum <= 6,
-        photoUrl: dayNum <= 3 ? '/assets/images/outdoor-reset.jpg' : undefined,
+        completed: false,
+        photoUrl: undefined,
       };
     });
   });

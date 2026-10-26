@@ -1,20 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Activity, Clock, Flame, Award, Smile, CheckCircle2, Circle, 
-  Target, Zap, Compass, ArrowUpRight, BarChart3, Heart, TrendingUp, Sparkles 
+import {
+  Activity, Clock, Flame, Award, Smile, CheckCircle2, Circle,
+  Target, Zap, Compass, ArrowUpRight, BarChart3, Heart, TrendingUp, Sparkles
 } from 'lucide-react';
 import { useStreak } from '../contexts/StreakContext';
 import { useAuth } from '../contexts/AuthContext';
 import { formatTime } from '../lib/utils';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { StreakCard } from '../components/StreakCard';
 
 export const Dashboard: React.FC = () => {
-  const { currentStreak, bestStreak, freezeTokens, dailyGoals, completionMatrix } = useStreak();
-  const { profile } = useAuth();
+  const { currentStreak, projectedStreak, bestStreak, todayCompleted, dailyGoals } = useStreak();
+  const { user, profile } = useAuth();
 
   // Real-Time Clock & Session Timer
   const [currentTime, setCurrentTime] = useState(new Date());
   const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Real data states
+  const [moodHistory, setMoodHistory] = useState<{ day: string; score: number; label: string }[]>([]);
+  const [goalsByCategory, setGoalsByCategory] = useState<{ category: string; completed: number; total: number; progress: number; color: string }[]>([]);
+  const [activeHabits, setActiveHabits] = useState<{ title: string; category: string; streak: number; completed: boolean }[]>([]);
 
   useEffect(() => {
     const clockInterval = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -25,39 +33,99 @@ export const Dashboard: React.FC = () => {
     };
   }, []);
 
+  // Fetch real data from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) {
+        setMoodHistory([]);
+        setGoalsByCategory([]);
+        setActiveHabits([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        if (!isSupabaseConfigured && user) {
+          const moods = JSON.parse(localStorage.getItem(`balance_moods_${user.id}`) || '[]');
+          const goals = JSON.parse(localStorage.getItem(`balance_user_goals_${user.id}`) || '[]');
+          const habits = JSON.parse(localStorage.getItem(`balance_user_habits_${user.id}`) || '[]');
+          setMoodHistory(moods.slice(0, 7).reverse().map((m: any) => ({ day: new Date(m.created_at).toLocaleDateString(undefined, { weekday: 'short' }), score: m.score, label: m.label })));
+          const categories = ['Mental', 'Physical', 'Career', 'Relationships'];
+          setGoalsByCategory(categories.map(category => { const matching = goals.filter((g: any) => g.category === category); const total = matching.reduce((sum: number, g: any) => sum + (g.milestones?.length || 0), 0); const completed = matching.reduce((sum: number, g: any) => sum + (g.milestones?.filter((m: any) => m.completed).length || 0), 0); return { category, total, completed, progress: total ? Math.round(completed / total * 100) : 0, color: 'bg-emerald-500' }; }));
+          setActiveHabits(habits.slice(0, 4).map((h: any) => ({ title: h.title, category: h.category, streak: h.streak, completed: h.completed_today })));
+          setLoading(false);
+          return;
+        }
+        // 1. Fetch Mood History (Last 7 days)
+        const { data: moodData } = await supabase
+          .from('user_mood_logs')
+          .select('score, label, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(7);
+
+        if (moodData) {
+          const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const formattedMood = moodData.reverse().map(m => ({
+            day: days[new Date(m.created_at).getDay()],
+            score: m.score,
+            label: m.label
+          }));
+          setMoodHistory(formattedMood);
+        }
+
+        // 2. Fetch Goals for Category Breakdown
+        const { data: goalsData } = await supabase
+          .from('user_goals')
+          .select('category, progress, milestones')
+          .eq('user_id', user.id);
+
+        if (goalsData) {
+          const categories = ['Mental', 'Physical', 'Career', 'Relationships'];
+          const colors = ['bg-emerald-500', 'bg-teal-500', 'bg-amber-500', 'bg-indigo-500'];
+
+          const breakdown = categories.map((cat, idx) => {
+            const catGoals = goalsData.filter(g => g.category === cat);
+            const total = catGoals.reduce((acc, g) => acc + (g.milestones?.length || 0), 0);
+            const completed = catGoals.reduce((acc, g) => acc + (g.milestones?.filter((m: any) => m.completed).length || 0), 0);
+            const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            return { category: cat, completed, total, progress, color: colors[idx] };
+          });
+          setGoalsByCategory(breakdown);
+        }
+
+        // 3. Fetch Active Habits
+        const { data: habitsData } = await supabase
+          .from('user_habits')
+          .select('title, category, streak, completed_today')
+          .eq('user_id', user.id)
+          .limit(4);
+
+        if (habitsData) {
+          setActiveHabits(habitsData.map(h => ({
+            title: h.title,
+            category: h.category,
+            streak: h.streak,
+            completed: h.completed_today
+          })));
+        }
+      } catch (err) {
+        console.error('Dashboard data fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
   // Calculate Dynamic Balance Score (0 - 100%)
-  const goalsRatio = dailyGoals.filter((g) => g.completed).length / dailyGoals.length;
+  const goalsRatio = dailyGoals.length > 0 ? dailyGoals.filter((g) => g.completed).length / dailyGoals.length : 0;
   const streakFactor = Math.min(currentStreak / 10, 1) * 30; // up to 30 pts
   const goalFactor = goalsRatio * 40; // up to 40 pts
   const baseRestoration = 20; // 20 pts base mindfulness
   const dynamicBalanceScore = Math.min(Math.round(baseRestoration + streakFactor + goalFactor), 98);
-
-  // Past 7 Days Mood Trend
-  const moodHistory = [
-    { day: 'Mon', score: 3.5, label: 'Steady' },
-    { day: 'Tue', score: 4.2, label: 'Energized' },
-    { day: 'Wed', score: 2.8, label: 'Fatigued' },
-    { day: 'Thu', score: 4.0, label: 'Centered' },
-    { day: 'Fri', score: 4.5, label: 'Thriving' },
-    { day: 'Sat', score: 4.8, label: 'Grounded' },
-    { day: 'Sun', score: 4.4, label: 'Balanced' },
-  ];
-
-  // Category Goals Breakdown
-  const goalsByCategory = [
-    { category: 'Mental', completed: 3, total: 4, progress: 75, color: 'bg-emerald-500' },
-    { category: 'Physical', completed: 2, total: 3, progress: 66, color: 'bg-teal-500' },
-    { category: 'Career', completed: 4, total: 5, progress: 80, color: 'bg-amber-500' },
-    { category: 'Relationships', completed: 2, total: 2, progress: 100, color: 'bg-indigo-500' },
-  ];
-
-  // Habits sample list
-  const activeHabits = [
-    { title: 'Morning sunlight & hydration', category: 'Physical', streak: 12, completed: true },
-    { title: '25m Focus Sprint before noon', category: 'Productivity', streak: 8, completed: true },
-    { title: 'Screen curfew at 9:30 PM', category: 'Digital', streak: 5, completed: false },
-    { title: 'Daily Gratitude or Journal note', category: 'Mental', streak: 14, completed: true },
-  ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
@@ -93,6 +161,8 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <StreakCard />
 
       {/* Row 1: Score Gauge + Key Vital Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -138,7 +208,7 @@ export const Dashboard: React.FC = () => {
 
           <div className="flex items-baseline gap-2 my-2">
             <span className="text-4xl font-extrabold font-heading text-ink-900 dark:text-linen-100">
-              {currentStreak}
+              {todayCompleted ? projectedStreak : currentStreak}
             </span>
             <span className="text-xs font-bold text-ink-700/70 dark:text-linen-200/70">
               Consecutive Days
@@ -147,7 +217,7 @@ export const Dashboard: React.FC = () => {
 
           <div className="flex items-center justify-between text-xs text-ink-700/70 dark:text-linen-200/70 pt-2 border-t border-sage-100 dark:border-ink-800">
             <span>Best: {bestStreak} Days</span>
-            <span className="text-teal-600 dark:text-teal-400 font-bold">{freezeTokens} Freezes</span>
+            <span className="text-teal-600 dark:text-teal-400 font-bold">{todayCompleted ? 'Locks at midnight' : 'Complete a tracker today'}</span>
           </div>
         </div>
 

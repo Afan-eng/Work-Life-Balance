@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Headphones, Play, Pause, SkipForward, SkipBack, Volume2, 
-  VolumeX, Sparkles, CheckCircle2, Clock, Share2 
-} from 'lucide-react';
-import { useStreak } from '../contexts/StreakContext';
+import { Headphones, Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, ExternalLink, Search } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useContentProgress } from '../contexts/ContentProgressContext';
 import { formatTime } from '../lib/utils';
 
 interface PodcastEpisode {
@@ -14,93 +12,105 @@ interface PodcastEpisode {
   duration: number; // in seconds
   description: string;
   image: string;
+  audioUrl?: string;
+  sourceUrl: string;
 }
 
 const EPISODES: PodcastEpisode[] = [
   {
     id: 'ep_1',
-    title: 'Ep. 42: De-escalating Corporate Burnout with Somatic Anchors',
-    host: 'Elena Vance',
-    guest: 'Dr. Soraya Kim, MD',
-    duration: 1840, // ~30m
-    description: 'Why intellectualizing stress fails, and how vagal nerve exercises reset sympathetic nervous activation.',
-    image: '/assets/images/outdoor-reset.jpg',
+    title: 'Meditation: Natural, Open Awareness',
+    host: 'Tara Brach',
+    guest: 'Guided mindfulness practice',
+    duration: 1014,
+    audioUrl: 'https://traffic.libsyn.com/tarabrach/2018-07-11-Meditation-Natural-Open-Awareness-TaraBrach.mp3',
+    sourceUrl: 'https://www.tarabrach.com/meditation-natural-open-awareness/',
+    description: 'A guided meditation that explores open awareness and gently works with stress and attention.',
+    image: '/assets/covers/podcast-covers/ep_1.svg',
   },
   {
     id: 'ep_2',
-    title: 'Ep. 41: Deep Work in the Age of Constant Interruption',
-    host: 'Elena Vance',
-    guest: 'Marcus Vance',
-    duration: 1520, // ~25m
-    description: 'Architecting your day around Ultradian 90-minute biological rhythms without feeling guilty for taking pauses.',
-    image: '/assets/images/hero-focus.jpg',
+    title: 'Breath Awareness Meditation',
+    host: 'Dr. Genelle Weits · Military Health System',
+    guest: 'Guided mindfulness practice',
+    duration: 555,
+    audioUrl: 'https://www.dvidshub.net/download/audio/69533',
+    sourceUrl: 'https://www.dvidshub.net/audio/69533/military-meditation-coach-breath-awareness-meditation-dr-weits',
+    description: 'A public-domain breath awareness meditation recorded by the Defense Health Agency.',
+    image: '/assets/covers/podcast-covers/ep_2.svg',
   },
   {
     id: 'ep_3',
-    title: 'Ep. 40: The Gut-Brain Axis: Mindful Nutrition Protocols',
-    host: 'Elena Vance',
-    guest: 'Chef Amina Noor',
-    duration: 1680,
-    description: 'Transforming mealtime into a restorative sensory practice to eliminate systemic digestive inflammation.',
-    image: '/assets/images/nutrition-mindful.jpg',
+    title: 'The body keeps the score: loneliness and your health',
+    host: 'World Health Organization',
+    guest: 'Off the Record podcast',
+    duration: 0,
+    sourceUrl: 'https://www.who.int/podcasts/series/off-the-record/episode-2-the-body-keeps-the-score-loneliness-and-your-health',
+    description: 'A WHO conversation about loneliness, social connection, and health. Listen on the publisher site.',
+    image: '/assets/covers/podcast-covers/ep_3.svg',
   },
   {
     id: 'ep_4',
-    title: 'Ep. 39: Digital Detox: Building a Phone-Free Bedroom Sanctuary',
-    host: 'Elena Vance',
-    guest: 'David Okafor',
-    duration: 1340,
-    description: 'Practical tactics from high-output founders on reclaiming morning clarity from algorithmic distraction.',
-    image: '/assets/images/serenity-work-banner.jpg',
+    title: 'Managing stress in uncertain times',
+    host: 'Headspace',
+    guest: 'Guided body scan meditation',
+    duration: 0,
+    sourceUrl: 'https://www.youtube.com/watch?v=GsE0NHdLn5I',
+    description: 'A ten-minute guided body scan from Headspace. Open the source to listen.',
+    image: '/assets/covers/podcast-covers/ep_4.svg',
   },
 ];
 
 export const Podcasts: React.FC = () => {
-  const { recordActivity } = useStreak();
+  const { user, openAuthModal } = useAuth();
+  const { isCompleted, markCompleted, busy } = useContentProgress();
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const [currentEpIndex, setCurrentEpIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(120); // 2m preview
+  const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(0.8);
   const [isMuted, setIsMuted] = useState(false);
+  const [search, setSearch] = useState('');
+  const [playbackError, setPlaybackError] = useState('');
 
   const currentEp = EPISODES[currentEpIndex];
+  const markCurrentCompleted = async () => {
+    if (!user) { openAuthModal('login'); return; }
+    const saved = await markCompleted('podcast', currentEp.id, currentEp.title);
+    if (!saved) setPlaybackError('Could not save listening progress. Check your connection and try again.');
+  };
 
-  // Simulated scrubber progression
   useEffect(() => {
-    let interval: any;
-    if (isPlaying) {
-      interval = setInterval(() => {
-        setCurrentTime((t) => {
-          if (t >= currentEp.duration) {
-            setIsPlaying(false);
-            recordActivity('moment', `Listened to ${currentEp.title}`);
-            return 0;
-          }
-          return t + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isPlaying, currentEp, recordActivity]);
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = isMuted ? 0 : volume;
+    if (isPlaying && currentEp.audioUrl) audio.play().catch(() => { setIsPlaying(false); setPlaybackError('This stream could not be played here. Use “Open source” to listen on the publisher site.'); });
+    else audio.pause();
+  }, [isPlaying, currentEpIndex, volume, isMuted, currentEp.audioUrl]);
+
+  const visibleEpisodes = EPISODES.filter(ep => `${ep.title} ${ep.host} ${ep.description}`.toLowerCase().includes(search.toLowerCase()));
 
   const togglePlay = () => {
-    if (!isPlaying) {
-      recordActivity('moment', `Started podcast: ${currentEp.title}`);
-    }
+    if (!currentEp.audioUrl) { window.open(currentEp.sourceUrl, '_blank', 'noopener,noreferrer'); return; }
+    setPlaybackError('');
     setIsPlaying(!isPlaying);
   };
 
   const handleNext = () => {
-    setCurrentEpIndex((prev) => (prev + 1) % EPISODES.length);
+    const nextIndex = (currentEpIndex + 1) % EPISODES.length;
+    setCurrentEpIndex(nextIndex);
     setCurrentTime(0);
-    setIsPlaying(true);
+    setIsPlaying(Boolean(EPISODES[nextIndex].audioUrl));
+    setPlaybackError('');
   };
 
   const handlePrev = () => {
-    setCurrentEpIndex((prev) => (prev - 1 + EPISODES.length) % EPISODES.length);
+    const nextIndex = (currentEpIndex - 1 + EPISODES.length) % EPISODES.length;
+    setCurrentEpIndex(nextIndex);
     setCurrentTime(0);
-    setIsPlaying(true);
+    setIsPlaying(Boolean(EPISODES[nextIndex].audioUrl));
+    setPlaybackError('');
   };
 
   return (
@@ -112,7 +122,7 @@ export const Podcasts: React.FC = () => {
           <span>Mindful Audio Conversations</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold font-heading text-ink-900 dark:text-linen-100">
-          Balance Studio Audio Lounge
+          Balance Compass Audio Lounge
         </h1>
         <p className="text-xs sm:text-sm text-ink-700/70 dark:text-linen-200/70">
           Listen to restorative dialogues on somatic neuroscience, boundary setting, and intentional living.
@@ -157,14 +167,15 @@ export const Podcasts: React.FC = () => {
             <input
               type="range"
               min="0"
-              max={currentEp.duration}
+              max={currentEp.duration || 1}
               value={currentTime}
-              onChange={(e) => setCurrentTime(Number(e.target.value))}
+              disabled={!currentEp.audioUrl}
+              onChange={(e) => { const next = Number(e.target.value); setCurrentTime(next); if (audioRef.current) audioRef.current.currentTime = next; }}
               className="w-full accent-sage-500 h-2 bg-sage-200/70 dark:bg-ink-800 rounded-lg cursor-pointer"
             />
             <div className="flex justify-between text-[11px] font-mono text-ink-700/60 dark:text-linen-200/60">
               <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(currentEp.duration)}</span>
+              <span>{currentEp.duration ? formatTime(currentEp.duration) : 'Publisher player'}</span>
             </div>
           </div>
 
@@ -182,7 +193,7 @@ export const Podcasts: React.FC = () => {
                 onClick={togglePlay}
                 className="w-12 h-12 rounded-2xl bg-sage-500 hover:bg-sage-600 text-white flex items-center justify-center shadow-soft hover:scale-105 transition"
               >
-                {isPlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
+                {!currentEp.audioUrl ? <ExternalLink className="w-5 h-5" /> : isPlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
               </button>
 
               <button
@@ -218,20 +229,25 @@ export const Podcasts: React.FC = () => {
         </div>
       </div>
 
+      <audio ref={audioRef} src={currentEp.audioUrl} preload="metadata" onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)} onEnded={() => { setIsPlaying(false); setCurrentTime(0); void markCurrentCompleted(); }} onError={() => { if (isPlaying) { setIsPlaying(false); setPlaybackError('Audio could not load. Check your connection or use the publisher link.'); } }} />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sage-200 bg-white p-4 dark:border-ink-700 dark:bg-ink-900"><p className="text-sm font-semibold text-ink-900 dark:text-linen-100">{isCompleted('podcast', currentEp.id) ? 'This episode is in your completed library.' : currentEp.audioUrl ? 'Finish the audio to mark it complete automatically.' : 'Listened on the publisher? Mark this episode complete.'}</p><button type="button" disabled={Boolean(currentEp.audioUrl && isPlaying)} onClick={() => void markCurrentCompleted()} className="rounded-xl bg-sage-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">{isCompleted('podcast', currentEp.id) ? 'Completed ✓' : busy ? 'Saving…' : 'Mark listened'}</button></div>
+      {playbackError && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">{playbackError}</p>}
+
       {/* Episodes Directory */}
       <div className="space-y-4">
-        <h3 className="font-heading font-bold text-lg text-ink-900 dark:text-linen-100">
-          All Episodes ({EPISODES.length})
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-heading font-bold text-lg text-ink-900 dark:text-linen-100">Audio library ({visibleEpisodes.length})</h3><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 h-4 w-4 text-ink-700/50"/><input aria-label="Search audio" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search audio…" className="w-full rounded-xl border border-sage-200 bg-white py-2 pl-9 pr-3 text-xs dark:border-ink-700 dark:bg-ink-900 dark:text-white"/></div></div>
 
         <div className="space-y-3">
-          {EPISODES.map((ep, idx) => (
+          {visibleEpisodes.map((ep) => {
+            const idx = EPISODES.findIndex(item => item.id === ep.id);
+            return (
             <div
               key={ep.id}
               onClick={() => {
                 setCurrentEpIndex(idx);
                 setCurrentTime(0);
-                setIsPlaying(true);
+                setIsPlaying(Boolean(ep.audioUrl));
+                setPlaybackError('');
               }}
               className={`glass-card rounded-2xl p-4 sm:p-5 border cursor-pointer transition flex items-center justify-between gap-4 ${
                 idx === currentEpIndex
@@ -245,7 +261,7 @@ export const Podcasts: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="font-heading font-bold text-xs sm:text-sm text-ink-900 dark:text-linen-100">
-                    {ep.title}
+                    {ep.title}{isCompleted('podcast', ep.id) && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-1 text-[9px] font-bold uppercase text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Complete</span>}
                   </h4>
                   <p className="text-[11px] text-ink-700/60 dark:text-linen-200/60 mt-0.5 line-clamp-1">
                     {ep.description}
@@ -254,15 +270,11 @@ export const Podcasts: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
-                <span className="text-xs font-mono text-ink-700/60 dark:text-linen-200/60">
-                  {formatTime(ep.duration)}
-                </span>
-                <button className="w-8 h-8 rounded-full bg-sage-100 dark:bg-sage-950 text-sage-600 flex items-center justify-center hover:bg-sage-500 hover:text-white transition">
-                  <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                </button>
+                <span className="text-xs font-mono text-ink-700/60 dark:text-linen-200/60">{ep.duration ? formatTime(ep.duration) : 'Publisher'}</span>
+                <a href={ep.sourceUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} aria-label={`Open ${ep.title} source`} className="grid h-8 w-8 place-items-center rounded-full bg-sage-100 text-sage-600 hover:bg-sage-500 hover:text-white dark:bg-sage-950"><ExternalLink className="h-3.5 w-3.5" /></a>
               </div>
             </div>
-          ))}
+          );})}
         </div>
       </div>
     </div>

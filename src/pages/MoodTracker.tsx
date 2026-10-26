@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Smile, Sparkles, Plus, Calendar, Tag, CheckCircle2, History, Heart, ArrowRight } from 'lucide-react';
 import { useStreak } from '../contexts/StreakContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,44 +22,60 @@ export const MoodTracker: React.FC = () => {
   const { user } = useAuth();
 
   const [selectedScore, setSelectedScore] = useState<number>(3);
-  const [selectedTags, setSelectedTags] = useState<string[]>(['Nature Walk', 'Restful Sleep']);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [journalNote, setJournalNote] = useState('');
   const [isLoggedSuccess, setIsLoggedSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const [history, setHistory] = useState<UserMoodLogRecord[]>([
-    {
-      id: 'mood_1',
-      user_id: 'usr_demo',
-      score: 4,
-      label: 'Energized',
-      tags: ['Deep Work', 'Hydration'],
-      note: 'Completed 2 productive Pomodoro sprints after a brisk morning walk. Mind felt exceptionally sharp.',
-      created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-    },
-    {
-      id: 'mood_2',
-      user_id: 'usr_demo',
-      score: 3,
-      label: 'Balanced',
-      tags: ['Nature Walk', 'Restful Sleep'],
-      note: 'Took 20 minutes to sit by the garden without phone. Softened the edge of afternoon fatigue.',
-      created_at: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-    },
-  ]);
+  const [history, setHistory] = useState<UserMoodLogRecord[]>([]);
+
+  // Fetch mood history on mount
+  useEffect(() => {
+    const fetchMoodHistory = async () => {
+      if (isSupabaseConfigured && user) {
+        const { data, error } = await supabase
+          .from('user_mood_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          setHistory(data as UserMoodLogRecord[]);
+        }
+      } else if (user) {
+        try {
+          setHistory(JSON.parse(localStorage.getItem(`balance_moods_${user.id}`) || '[]'));
+        } catch { setHistory([]); }
+      } else {
+        setHistory([]);
+      }
+      setLoading(false);
+    };
+
+    fetchMoodHistory();
+  }, [user]);
 
   const toggleTag = (tag: string) => {
-    setSelectedTags(prev => 
+    setSelectedTags(prev =>
       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
     );
   };
 
+
   const handleLogMood = async (e: React.FormEvent) => {
     e.preventDefault();
-    const currentLevel = MOOD_LEVELS.find(m => m.score === selectedScore) || MOOD_LEVELS[2];
+
+    const currentLevel =
+      MOOD_LEVELS.find(m => m.score === selectedScore) || MOOD_LEVELS[2];
+
+    if (!user?.id) {
+      alert('Please sign in before saving your mood entry.');
+      return;
+    }
 
     const newRecord: UserMoodLogRecord = {
-      id: `mood_${Date.now()}`,
-      user_id: user?.id || 'usr_guest',
+      id: crypto.randomUUID(),
+      user_id: user.id,
       score: selectedScore,
       label: currentLevel.label,
       tags: selectedTags,
@@ -67,15 +83,38 @@ export const MoodTracker: React.FC = () => {
       created_at: new Date().toISOString(),
     };
 
-    setHistory([newRecord, ...history]);
-    recordActivity('mood', `Logged mood: ${currentLevel.label} (${selectedScore}/5)`);
-
-    if (isSupabaseConfigured && user) {
-      await supabase.from('user_mood_logs').insert([newRecord]);
+    if (!isSupabaseConfigured) {
+      const next = [newRecord, ...history];
+      setHistory(next);
+      localStorage.setItem(`balance_moods_${user.id}`, JSON.stringify(next));
+      recordActivity('mood', `Logged mood: ${currentLevel.label} (${selectedScore}/5)`);
+      setIsLoggedSuccess(true);
+      setJournalNote('');
+      setTimeout(() => setIsLoggedSuccess(false), 3000);
+      return;
     }
+
+    const { data, error } = await supabase
+      .from('user_mood_logs')
+      .insert(newRecord)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to save mood entry:', error);
+      alert(`Mood entry could not be saved: ${error.message}`);
+      return;
+    }
+
+    setHistory(prev => [data as UserMoodLogRecord, ...prev]);
+    recordActivity(
+      'mood',
+      `Logged mood: ${currentLevel.label} (${selectedScore}/5)`
+    );
 
     setIsLoggedSuccess(true);
     setJournalNote('');
+
     setTimeout(() => setIsLoggedSuccess(false), 3000);
   };
 
@@ -172,7 +211,7 @@ export const MoodTracker: React.FC = () => {
           <div className="flex items-center justify-between pt-4 border-t border-sage-100 dark:border-ink-800">
             <div className="flex items-center gap-2 text-xs text-ink-700/60 dark:text-linen-200/60">
               <Sparkles className="w-4 h-4 text-warmAmber-500" />
-              <span>Logging increments your 7-day streak</span>
+              <span>Logging updates your personal streak</span>
             </div>
 
             <button
@@ -208,7 +247,17 @@ export const MoodTracker: React.FC = () => {
         </div>
 
         <div className="space-y-3">
-          {history.map((record) => (
+          {loading ? (
+            <div className="text-center py-10 animate-pulse">
+              <Sparkles className="w-8 h-8 text-sage-300 mx-auto mb-2" />
+              <p className="text-xs text-ink-700/60 dark:text-linen-200/60">Fetching your emotional timeline...</p>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-10 glass-card rounded-2xl border border-sage-200/60">
+              <History className="w-8 h-8 text-sage-200 mx-auto mb-2" />
+              <p className="text-xs text-ink-700/60 dark:text-linen-200/60">Your reflection history will appear here.</p>
+            </div>
+          ) : history.map((record) => (
             <div
               key={record.id}
               className="glass-card rounded-2xl p-5 border border-sage-200/70 dark:border-ink-700 shadow-soft space-y-3"

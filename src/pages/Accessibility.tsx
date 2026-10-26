@@ -15,7 +15,7 @@ export const Accessibility: React.FC = () => {
 
       <div className="glass-card rounded-3xl p-8 shadow-soft border border-sage-200/80 dark:border-ink-700 space-y-6 text-xs sm:text-sm text-ink-800/80 dark:text-linen-200/80 leading-relaxed">
         <p>
-          At Balance Studio, accessibility is foundational to our philosophy of universal somatic peace. We are continuously engineering our application to conform to Web Content Accessibility Guidelines (WCAG) 2.1 Level AA standards.
+          At Balance Compass, accessibility is foundational to our philosophy of universal somatic peace. We are continuously engineering our application to conform to Web Content Accessibility Guidelines (WCAG) 2.1 Level AA standards.
         </p>
 
         <div className="space-y-3">
